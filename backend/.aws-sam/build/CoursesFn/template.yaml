@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Runtime: nodejs18.x
+    Timeout: 10
+    MemorySize: 128
+
+  Api:
+    Auth:
+      DefaultAuthorizer: CognitoAuthorizer
+      Authorizers:
+        CognitoAuthorizer:
+          UserPoolArn: arn:aws:cognito-idp:eu-central-1:672626785669:userpool/eu-central-1_fVi49DC6p
+
+Resources:
+  # ====================
+  # DynamoDB Tables
+  # ====================
+
+  CoursesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  ProgressTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: courseId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: courseId
+          KeyType: RANGE
+
+  # ====================
+  # Lambda Functions
+  # ====================
+
+  CoursesFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: courses.handler
+      Environment:
+        Variables:
+          TABLE: !Ref CoursesTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CoursesTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /courses
+            Method: ANY
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  ProgressFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: progress.handler
+      Environment:
+        Variables:
+          TABLE: !Ref ProgressTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProgressTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /progress/{courseId}
+            Method: ANY
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+# ====================
+# Stack Outputs
+# ====================
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"

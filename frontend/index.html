@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>CourseMastery Dashboard</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ink: "#0f172a",
+                        shell: "#f3f7fb",
+                        panel: "#ffffff",
+                        focus: "#0284c7",
+                        focusdark: "#075985",
+                        mastery: "#16a34a",
+                        challenge: "#f59e0b",
+                        gap: "#e11d48",
+                        cyanx: "#0891b2",
+                        bluex: "#2563eb",
+                        amberx: "#d97706",
+                        greenx: "#15803d",
+                        redx: "#b91c1c"
+                    },
+                    fontFamily: {
+                        sans: ["Manrope", "system-ui", "sans-serif"],
+                        mono: ["IBM Plex Mono", "ui-monospace", "monospace"]
+                    },
+                    boxShadow: {
+                        soft: "0 10px 30px rgba(15, 23, 42, 0.08)",
+                        card: "0 2px 12px rgba(15, 23, 42, 0.08)"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        body {
+            background:
+                linear-gradient(120deg, rgba(14, 165, 233, 0.12) 0 28%, transparent 28% 100%),
+                linear-gradient(180deg, #f8fbff 0%, #eef6fb 48%, #f7fafc 100%);
+            background-attachment: fixed;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::after {
+            content: "";
+            position: absolute;
+            inset: auto 0 0 0;
+            height: 4px;
+            background: var(--tone);
+        }
+
+        .study-panel {
+            background: rgba(255, 255, 255, 0.96);
+        }
+
+        .answer-option {
+            transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+        }
+
+        .answer-option:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(2, 132, 199, 0.14);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen font-sans text-ink">
+    <div class="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-8">
+        <header class="mb-5 rounded-lg border border-cyan-200/80 glass p-4 shadow-soft">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="mr-auto">
+                    <h1 class="bg-gradient-to-r from-cyan-700 to-blue-800 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">CourseMastery</h1>
+                    <p class="text-xs font-semibold text-cyan-800">Adaptive Understanding Dashboard</p>
+                </div>
+                <button id="logout" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 shadow-sm hover:bg-rose-100">Logout</button>
+                <button id="adminBtn" class="hidden rounded-lg border border-blue-700 bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700" onclick="location.href='admin.html'">Admin</button>
+            </div>
+        </header>
+
+
+        <div class="mb-4 grid gap-3 sm:grid-cols-4">
+            <div class="stat-card rounded-lg border border-blue-100 bg-white p-3 shadow-card" style="--tone:#0284c7">
+                <div class="text-xs font-bold uppercase text-slate-500">Courses</div>
+                <div id="statCourses" class="text-2xl font-extrabold text-slate-950">0</div>
+            </div>
+            <div class="stat-card rounded-lg border border-blue-100 bg-white p-3 shadow-card" style="--tone:#2563eb">
+                <div class="text-xs font-bold uppercase text-slate-500">Current Level</div>
+                <div id="statLevel" class="text-2xl font-extrabold text-slate-950">Easy</div>
+            </div>
+            <div class="stat-card rounded-lg border border-blue-100 bg-white p-3 shadow-card" style="--tone:#16a34a">
+                <div class="text-xs font-bold uppercase text-slate-500">Understanding Score</div>
+                <div id="statUnderstanding" class="text-2xl font-extrabold text-slate-950">0%</div>
+            </div>
+            <div class="stat-card rounded-lg border border-blue-100 bg-white p-3 shadow-card" style="--tone:#2563eb">
+                <div class="text-xs font-bold uppercase text-slate-500">Questions Done</div>
+                <div id="statAnswered" class="text-2xl font-extrabold text-slate-950">0</div>
+            </div>
+        </div>
+
+        <div id="status" class="mb-4 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-900 shadow-card">Ready</div>
+
+        <div class="grid gap-5 lg:grid-cols-[350px_minmax(0,1fr)]">
+            <aside class="rounded-lg border border-blue-100 bg-white p-3 shadow-card lg:sticky lg:top-5 lg:h-fit">
+                <div class="mb-3 flex items-center justify-between">
+                    <h2 class="text-sm font-extrabold text-blue-950">Course Library</h2>
+                    <span class="rounded bg-blue-50 px-2 py-0.5 font-mono text-[11px] text-blue-700">choose one</span>
+                </div>
+                <div id="courses" class="grid gap-2"></div>
+            </aside>
+            <main id="selectedCourse"></main>
+        </div>
+    </div>
+
+    <script type="module">
+        import {
+            parseAuth,
+            getUser,
+            login,
+            logout,
+            isAdmin
+        } from "./auth.js?v=AUTH16";
+        import { API } from "./api.js?v=AUTH16";
+
+        const LEVELS = ["easy", "medium", "hard"];
+        const LEVEL_WEIGHT = { easy: 1, medium: 2, hard: 3 };
+        const LEVEL_RATING = { easy: 1200, medium: 1500, hard: 1800 };
+        const DEFAULT_STUDENT_RATING = 1400;
+        const ELO_K_STUDENT = 24;
+        const ELO_K_QUESTION = 8;
+
+        await parseAuth();
+        const user = getUser();
+        if (!user) {
+            await login();
+            throw new Error("Redirecting to login");
+        }
+
+        const canManageCourses = isAdmin();
+        if (canManageCourses) document.getElementById("adminBtn").classList.remove("hidden");
+        document.getElementById("logout").onclick = logout;
+
+        const statusEl = document.getElementById("status");
+        const selectedBox = document.getElementById("selectedCourse");
+        const coursesBox = document.getElementById("courses");
+        const statCourses = document.getElementById("statCourses");
+        const statLevel = document.getElementById("statLevel");
+        const statUnderstanding = document.getElementById("statUnderstanding");
+        const statAnswered = document.getElementById("statAnswered");
+
+        let courses = [];
+        let selectedCourse = null;
+        let progressRecord = null;
+        let adaptive = {
+            bank: [],
+            remaining: [],
+            asked: [],
+            currentQuestion: null,
+            scoreEarned: 0,
+            scorePossible: 0,
+            studentByObjective: {},
+            questionRatings: {},
+            objectiveRecentWrong: {},
+            objectiveLastAskedAt: {}
+        };
+
+        function esc(s) {
+            return String(s)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+        }
+
+        function counts(course) {
+            const chapters = Array.isArray(course.chapters) ? course.chapters : [];
+            const mcq = chapters.reduce((n, c) => n + (Array.isArray(c.mcqs) ? c.mcqs.length : 0), 0);
+            const flip = chapters.reduce((n, c) => n + (Array.isArray(c.flips) ? c.flips.length : 0), 0);
+            return { chapters: chapters.length, mcq, flip };
+        }
+
+        function normalizeDifficulty(raw, index, total) {
+            if (typeof raw === "string") {
+                const v = raw.trim().toLowerCase();
+                if (v === "easy" || v === "medium" || v === "hard") return v;
+            }
+            const third = Math.max(1, Math.ceil(total / 3));
+            if (index < third) return "easy";
+            if (index < third * 2) return "medium";
+            return "hard";
+        }
+
+        function buildQuestionBank(course) {
+            const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+            const all = [];
+            chapters.forEach((ch, chIdx) => {
+                const mcqs = Array.isArray(ch.mcqs) ? ch.mcqs : [];
+                mcqs.forEach((m, qIdx) => {
+                    const chapterId = ch.id || `ch-${chIdx + 1}`;
+                    const objectiveId = (typeof m.objectiveId === "string" && m.objectiveId.trim())
+                        ? m.objectiveId.trim()
+                        : chapterId;
+                    all.push({
+                        id: `${chapterId}-${qIdx}`,
+                        chapterId,
+                        objectiveId,
+                        chapterName: ch.name || `Chapter ${chIdx + 1}`,
+                        question: m.question || `Question ${qIdx + 1}`,
+                        options: Array.isArray(m.options) ? m.options : [],
+                        answerIndex: Number.isInteger(m.answerIndex) ? m.answerIndex : -1,
+                        difficulty: normalizeDifficulty(m.difficulty, all.length, 0)
+                    });
+                });
+            });
+
+            all.forEach((q, idx) => {
+                if (!q.difficulty) q.difficulty = normalizeDifficulty(null, idx, all.length);
+            });
+            return all;
+        }
+
+        function resetAdaptiveForCourse(course) {
+            const bank = buildQuestionBank(course);
+            const studentByObjective = {};
+            const questionRatings = {};
+            bank.forEach(q => {
+                studentByObjective[q.objectiveId] = DEFAULT_STUDENT_RATING;
+                questionRatings[q.id] = LEVEL_RATING[q.difficulty] || LEVEL_RATING.medium;
+            });
+            adaptive = {
+                bank,
+                remaining: bank.slice(),
+                asked: [],
+                currentQuestion: null,
+                scoreEarned: 0,
+                scorePossible: 0,
+                studentByObjective,
+                questionRatings,
+                objectiveRecentWrong: {},
+                objectiveLastAskedAt: {}
+            };
+            pickNextQuestion();
+        }
+
+        function understandingPct() {
+            if (!adaptive.scorePossible) return 0;
+            return Math.round((adaptive.scoreEarned / adaptive.scorePossible) * 100);
+        }
+
+        function totalAnswered() {
+            return adaptive.asked.length;
+        }
+
+        function avgStudentRating() {
+            const ratings = Object.values(adaptive.studentByObjective || {});
+            if (!ratings.length) return DEFAULT_STUDENT_RATING;
+            return ratings.reduce((a, b) => a + b, 0) / ratings.length;
+        }
+
+        function abilityBand(rating) {
+            if (rating < 1350) return "Easy";
+            if (rating < 1650) return "Medium";
+            return "Hard";
+        }
+
+        function currentLevelName() {
+            return abilityBand(avgStudentRating());
+        }
+
+        function updateStats() {
+            statCourses.textContent = String(courses.length);
+            statLevel.textContent = currentLevelName();
+            statUnderstanding.textContent = `${understandingPct()}%`;
+            statAnswered.textContent = String(totalAnswered());
+        }
+
+        function expectedCorrectProbability(studentRating, questionRating) {
+            return 1 / (1 + Math.pow(10, (questionRating - studentRating) / 400));
+        }
+
+        function deterministicTieBreak(id) {
+            let h = 0;
+            for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+            return (h % 1000) / 1_000_000;
+        }
+
+        function pickNextQuestion() {
+            if (!adaptive.remaining.length) {
+                adaptive.currentQuestion = null;
+                return;
+            }
+
+            const askedCount = adaptive.asked.length;
+            const lastObjective = askedCount ? adaptive.asked[askedCount - 1].objectiveId : null;
+
+            let best = adaptive.remaining[0];
+            let bestScore = Number.NEGATIVE_INFINITY;
+
+            for (const q of adaptive.remaining) {
+                const studentRating = adaptive.studentByObjective[q.objectiveId] ?? DEFAULT_STUDENT_RATING;
+                const questionRating = adaptive.questionRatings[q.id] ?? LEVEL_RATING[q.difficulty] ?? LEVEL_RATING.medium;
+                const weakness = Math.max(0, Math.min(1.5, (1500 - studentRating) / 400));
+                const difficultyMatch = 1 - Math.min(1, Math.abs(questionRating - studentRating) / 500);
+                const recentWrongBoost = adaptive.objectiveRecentWrong[q.objectiveId] ? 0.9 : 0;
+                const repetitionPenalty = lastObjective && q.objectiveId === lastObjective ? 0.35 : 0;
+                const askedAt = adaptive.objectiveLastAskedAt[q.objectiveId];
+                const spacingBoost = askedAt === undefined ? 0.15 : Math.min(0.35, (askedCount - askedAt) * 0.03);
+
+                const score =
+                    1.2 * weakness +
+                    1.0 * difficultyMatch +
+                    recentWrongBoost +
+                    spacingBoost -
+                    repetitionPenalty +
+                    deterministicTieBreak(q.id);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = q;
+                }
+            }
+
+            adaptive.currentQuestion = best;
+        }
+
+        async function saveProgress() {
+            if (!selectedCourse || !adaptive.bank.length) return;
+            const pct = Math.round((totalAnswered() / adaptive.bank.length) * 100);
+            const payload = { completed: pct === 100, progressPct: pct };
+            progressRecord = await API.saveProgress(selectedCourse.id, payload);
+            statusEl.textContent = `Saved. Completion ${pct}% | Understanding ${understandingPct()}%`;
+        }
+
+        function decayRecentWrongFlags() {
+            for (const key of Object.keys(adaptive.objectiveRecentWrong)) {
+                adaptive.objectiveRecentWrong[key] -= 1;
+                if (adaptive.objectiveRecentWrong[key] <= 0) {
+                    delete adaptive.objectiveRecentWrong[key];
+                }
+            }
+        }
+
+        async function answerQuestion(optionIdx) {
+            if (!adaptive.currentQuestion) return;
+            const q = adaptive.currentQuestion;
+            const level = q.difficulty;
+            const correct = optionIdx === q.answerIndex;
+            const objectiveId = q.objectiveId;
+
+            const studentRating = adaptive.studentByObjective[objectiveId] ?? DEFAULT_STUDENT_RATING;
+            const questionRating = adaptive.questionRatings[q.id] ?? LEVEL_RATING[level] ?? LEVEL_RATING.medium;
+            const expected = expectedCorrectProbability(studentRating, questionRating);
+            const actual = correct ? 1 : 0;
+
+            const newStudentRating = Math.max(900, Math.min(2200, studentRating + ELO_K_STUDENT * (actual - expected)));
+            const newQuestionRating = Math.max(900, Math.min(2200, questionRating - ELO_K_QUESTION * (actual - expected)));
+
+            adaptive.studentByObjective[objectiveId] = newStudentRating;
+            adaptive.questionRatings[q.id] = newQuestionRating;
+            adaptive.objectiveLastAskedAt[objectiveId] = adaptive.asked.length;
+            decayRecentWrongFlags();
+            if (!correct) adaptive.objectiveRecentWrong[objectiveId] = 3;
+
+            adaptive.scorePossible += LEVEL_WEIGHT[level];
+            if (correct) adaptive.scoreEarned += LEVEL_WEIGHT[level];
+            adaptive.asked.push({ id: q.id, objectiveId, question: q.question, level, correct });
+            adaptive.remaining = adaptive.remaining.filter(x => x.id !== q.id);
+            pickNextQuestion();
+            renderSelected();
+            await saveProgress();
+            updateStats();
+        }
+
+        async function restartAssessment() {
+            if (!selectedCourse) return;
+            resetAdaptiveForCourse(selectedCourse);
+            progressRecord = null;
+            renderSelected();
+            await saveProgress();
+            updateStats();
+            statusEl.textContent = "Assessment restarted from Easy level.";
+        }
+
+        function renderCourses() {
+            coursesBox.innerHTML = courses.map(c => {
+                const x = counts(c);
+                const isSelected = selectedCourse && selectedCourse.id === c.id;
+                const courseId = c?.id === undefined || c?.id === null ? "" : String(c.id);
+                return `
+                    <a class="block rounded-lg border p-3 transition ${isSelected ? "border-blue-400 bg-blue-50 shadow-card" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/70"}" href="/index.html?course=${encodeURIComponent(courseId)}">
+                        <div class="mb-1 text-sm font-extrabold text-slate-900">${esc(c.name || "(untitled)")}</div>
+                        <div class="font-mono text-[11px] font-medium text-cyan-700">ID ${esc(c.id || "n/a")}</div>
+                        <div class="mt-2 text-xs font-semibold text-slate-600">${x.chapters} chapters | ${x.mcq} MCQs | ${x.flip} cards</div>
+                    </a>
+                `;
+            }).join("");
+        }
+
+        function levelBadge(level) {
+            if (level === "easy") return "bg-emerald-100 text-emerald-800 border-emerald-300";
+            if (level === "medium") return "bg-amber-100 text-amber-800 border-amber-300";
+            return "bg-rose-100 text-rose-800 border-rose-300";
+        }
+
+        function wireActions() {
+            selectedBox.querySelectorAll("[data-answer]").forEach(btn => {
+                btn.onclick = async () => {
+                    const option = Number(btn.getAttribute("data-answer"));
+                    await answerQuestion(option);
+                };
+            });
+            const restartBtn = selectedBox.querySelector("[data-restart]");
+            if (restartBtn) restartBtn.onclick = async () => { await restartAssessment(); };
+        }
+
+        function renderSelected() {
+            if (!selectedCourse) {
+                selectedBox.innerHTML = `
+                    <div class="rounded-lg border border-dashed border-blue-300 bg-white p-10 text-center shadow-card">
+                        <div class="text-base font-extrabold text-blue-950">No Course Selected</div>
+                        <div class="mt-1 text-sm font-medium text-slate-600">Pick a course from the library to start adaptive assessment.</div>
+                        ${canManageCourses ? `
+                            <div class="mt-4">
+                                <a href="/admin.html" class="rounded-lg border border-blue-700 bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700">Create Course Content</a>
+                            </div>
+                        ` : `
+                            <div class="mt-4 text-xs font-semibold text-slate-500">Course creation is available for admin users only.</div>
+                        `}
+                    </div>
+                `;
+                updateStats();
+                return;
+            }
+
+            const x = counts(selectedCourse);
+            const q = adaptive.currentQuestion;
+            const completionPct = adaptive.bank.length ? Math.round((totalAnswered() / adaptive.bank.length) * 100) : 0;
+            const recent = adaptive.asked.slice(-5).reverse();
+
+            selectedBox.innerHTML = `
+                <div class="study-panel rounded-lg border border-cyan-200 p-4 shadow-card md:p-5">
+                    <div class="mb-4 flex flex-wrap items-center gap-2">
+                        <h2 class="bg-gradient-to-r from-cyan-800 to-blue-900 bg-clip-text text-2xl font-extrabold text-transparent">${esc(selectedCourse.name || "(untitled)")}</h2>
+                        <span class="rounded bg-cyan-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-cyan-800">ID ${esc(selectedCourse.id || "n/a")}</span>
+                    </div>
+                    <p class="mb-4 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${esc(selectedCourse.description || "")}</p>
+
+                    <div class="mb-4 grid gap-3 md:grid-cols-4">
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">Chapters<div class="mt-1 text-xl font-extrabold text-slate-950">${x.chapters}</div></div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">MCQs<div class="mt-1 text-xl font-extrabold text-slate-950">${x.mcq}</div></div>
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">Completion<div class="mt-1 text-xl font-extrabold text-amber-950">${completionPct}%</div></div>
+                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800">Understanding<div class="mt-1 text-xl font-extrabold text-emerald-950">${understandingPct()}%</div></div>
+                    </div>
+
+                    <div class="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-3">
+                        <div class="mb-2 flex items-center justify-between">
+                            <span class="text-sm font-extrabold text-blue-950">Assessment Progress</span>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs font-semibold text-blue-800">${totalAnswered()} / ${adaptive.bank.length}</span>
+                                <button type="button" data-restart="1" class="rounded border border-amber-600 bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-amber-600">Restart</button>
+                            </div>
+                        </div>
+                        <div class="h-3 overflow-hidden rounded bg-white shadow-inner">
+                            <div class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 transition-all" style="width:${completionPct}%"></div>
+                        </div>
+                        <div class="mt-2 text-xs font-medium text-slate-600">Last saved: ${progressRecord?.updatedAt ? esc(progressRecord.updatedAt) : "not saved yet"}</div>
+                    </div>
+
+                    ${q ? `
+                        <section class="mb-5 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+                            <div class="mb-3 flex flex-wrap items-center gap-2">
+                                <span class="rounded border px-2 py-0.5 text-xs font-bold ${levelBadge(q.difficulty)}">${q.difficulty.toUpperCase()}</span>
+                                <span class="text-xs font-bold text-blue-700">${esc(q.chapterName)}</span>
+                                <span class="ml-auto rounded bg-white px-2 py-0.5 text-[11px] font-mono font-bold text-cyan-800 shadow-sm">Adaptive: ${currentLevelName()}</span>
+                            </div>
+                            <h3 class="mb-3 text-lg font-extrabold text-slate-950">${esc(q.question)}</h3>
+                            <div class="grid gap-2">
+                                ${q.options.map((opt, i) => `
+                                    <button type="button" data-answer="${i}" class="answer-option rounded-lg border border-cyan-300 border-l-4 border-l-cyan-500 bg-white p-2.5 text-left text-sm font-bold text-slate-800 hover:border-blue-500 hover:border-l-blue-600 hover:bg-cyan-50">
+                                        ${esc(opt)}
+                                    </button>
+                                `).join("")}
+                            </div>
+                        </section>
+                    ` : `
+                        <section class="mb-5 rounded-lg border border-emerald-300 bg-emerald-100 p-4 text-sm font-bold text-emerald-900">
+                            Assessment complete for this course. Final understanding score: ${understandingPct()}%.
+                        </section>
+                    `}
+
+                    <section class="rounded-lg border border-slate-200 bg-white p-3">
+                        <h3 class="mb-2 text-sm font-extrabold text-slate-950">Recent Answers</h3>
+                        ${recent.length ? `
+                            <div class="space-y-2">
+                                ${recent.map(r => `
+                                    <div class="rounded border px-2 py-1 text-xs font-bold ${r.correct ? "border-emerald-300 bg-emerald-100 text-emerald-900" : "border-rose-300 bg-rose-100 text-rose-900"}">
+                                        [${r.level}] ${esc(r.question)} | ${r.correct ? "Correct" : "Incorrect"}
+                                    </div>
+                                `).join("")}
+                            </div>
+                        ` : `<div class="text-xs font-medium text-slate-600">No answers yet.</div>`}
+                    </section>
+                </div>
+            `;
+
+            wireActions();
+            updateStats();
+        }
+
+        try {
+            statusEl.textContent = "Loading courses...";
+            courses = await API.getCourses();
+            renderCourses();
+            const selectedId = new URLSearchParams(location.search).get("course");
+            selectedCourse = courses.find(c => String(c?.id) === selectedId) || null;
+
+            if (selectedCourse) {
+                statusEl.textContent = "Preparing adaptive assessment...";
+                resetAdaptiveForCourse(selectedCourse);
+                try {
+                    progressRecord = await API.getProgress(selectedCourse.id);
+                } catch (err) {
+                    console.error("PROGRESS LOAD ERROR:", err);
+                    progressRecord = null;
+                }
+                renderSelected();
+                statusEl.textContent = "Ready";
+            } else {
+                renderSelected();
+                statusEl.textContent = "Ready";
+            }
+            updateStats();
+        } catch (err) {
+            console.error("API error:", err);
+            statusEl.textContent = "Failed to load courses.";
+        }
+    </script>
+</body>
+
+</html>
+

@@ -1,0 +1,5 @@
+.env
+backend/node_modules/
+backend/local-api.out.log
+backend/local-api.err.log
+frontend/*.log

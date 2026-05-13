@@ -1,0 +1,20 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "auth.js",
+  "scripts": {
+    "start": "node local-api.js",
+    "check": "node --check auth.js && node --check courses.js && node --check progress.js && node --check local-api.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1042.0",
+    "@aws-sdk/client-dynamodb": "^3.1042.0",
+    "@aws-sdk/lib-dynamodb": "^3.1042.0"
+  }
+}
