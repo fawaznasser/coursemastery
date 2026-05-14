@@ -8,6 +8,13 @@ export const AUTH_CONFIG = {
             logoutUri: "https://d14uzenahir9zo.cloudfront.net/index.html",
             scopes: ["openid", "email"]
         },
+        netlify: {
+            origins: ["https://coursemastery.netlify.app"],
+            clientId: "61f4japklud36vcei7vrmkg4n5",
+            redirectUri: "https://coursemastery.netlify.app/index.html",
+            logoutUri: "https://coursemastery.netlify.app/index.html",
+            scopes: ["openid", "email"]
+        },
         development: {
             origins: ["http://127.0.0.1:5500", "http://localhost:5500"],
             clientId: "tt1s57jngkiiouukine269fo5",

@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    environment:
+      - LOCAL_API_PORT=3001
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5500:5500"
+    depends_on:
+      - backend
+    restart: unless-stopped

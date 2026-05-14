@@ -28,6 +28,37 @@ Stop local services:
 .\stop-dev.ps1
 ```
 
+## Docker Run
+
+Prerequisites:
+
+- Docker Desktop
+- `.env` file configured
+
+Start backend + frontend:
+
+```powershell
+docker compose up -d --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:5500/index.html
+```
+
+Follow logs:
+
+```powershell
+docker compose logs -f
+```
+
+Stop containers:
+
+```powershell
+docker compose down
+```
+
 ## Local URLs
 
 - Frontend: `http://127.0.0.1:5500/index.html`
