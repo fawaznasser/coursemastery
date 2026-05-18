@@ -121,8 +121,8 @@
     </div>
 
     <script type="module">
-        import { parseAuth, getUser, isAdmin, login } from "./auth.js?v=AUTH16";
-        import { API } from "./api.js?v=AUTH16";
+        import { parseAuth, getUser, isAdmin, login } from "./auth.js?v=AUTH17";
+        import { API } from "./api.js?v=AUTH17";
 
         await parseAuth();
         const user = getUser();
@@ -481,6 +481,7 @@
                             <div class="flex gap-2">
                                 <button class="rounded border border-blue-700 bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700" data-open-id="${esc(c.id || "")}">Open</button>
                                 <button class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50" data-edit-id="${esc(c.id || "")}">Edit</button>
+                                <button class="rounded border border-rose-700 bg-rose-600 px-2 py-1 text-xs font-bold text-white hover:bg-rose-700" data-delete-id="${esc(c.id || "")}">Delete</button>
                             </div>
                         </div>
                         <div class="mt-2 text-xs font-medium text-slate-700 whitespace-pre-wrap">${esc(c.description || "")}</div>
@@ -500,6 +501,25 @@
                     const id = btn.getAttribute("data-edit-id");
                     const course = courses.find(x => x.id === id);
                     if (course) setEditMode(course);
+                };
+            });
+            adminBox.querySelectorAll("[data-delete-id]").forEach(btn => {
+                btn.onclick = async () => {
+                    const id = btn.getAttribute("data-delete-id") || "";
+                    if (!id) return;
+                    const ok = confirm(`Delete course "${id}"? This cannot be undone.`);
+                    if (!ok) return;
+                    status.textContent = "Deleting course...";
+                    try {
+                        await API.deleteCourse(id);
+                        if (editingCourseId === id) resetForm();
+                        await loadCourses();
+                        status.textContent = `Deleted course ${id}.`;
+                    } catch (err) {
+                        console.error("DELETE COURSE ERROR:", err);
+                        status.textContent = "Failed to delete course.";
+                        adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
+                    }
                 };
             });
         }
