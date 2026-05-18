@@ -6,7 +6,9 @@ const {
 const {
     DynamoDBDocumentClient,
     ScanCommand,
-    PutCommand
+    PutCommand,
+    DeleteCommand,
+    GetCommand
 } = require("@aws-sdk/lib-dynamodb");
 
 const { user, admin } = require("./auth");
@@ -19,7 +21,7 @@ function cors() {
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Authorization,Content-Type",
-        "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS"
     };
 }
 
@@ -76,6 +78,29 @@ function validateCourse(body) {
     return null;
 }
 
+function validateChapter(chapter) {
+    if (!chapter || typeof chapter !== "object") return "Invalid chapter";
+    if (typeof chapter.name !== "string" || !chapter.name.trim()) return "Chapter name is required";
+
+    if (chapter.mcqs !== undefined) {
+        if (!Array.isArray(chapter.mcqs)) return "Invalid chapter MCQs";
+        for (const mcq of chapter.mcqs) {
+            const err = validateMcq(mcq);
+            if (err) return err;
+        }
+    }
+
+    if (chapter.flips !== undefined) {
+        if (!Array.isArray(chapter.flips)) return "Invalid chapter flips";
+        for (const flip of chapter.flips) {
+            const err = validateFlip(flip);
+            if (err) return err;
+        }
+    }
+
+    return null;
+}
+
 function normalizeCourse(body) {
     const chapters = (body.chapters || []).map((ch, idx) => ({
         id: ch.id || `ch-${idx + 1}`,
@@ -101,6 +126,39 @@ function normalizeCourse(body) {
     };
 }
 
+function normalizeChapter(chapter, fallbackId) {
+    return {
+        id: String(chapter.id || fallbackId || "").trim() || `ch-${Date.now()}`,
+        name: String(chapter.name || "").trim(),
+        mcqs: Array.isArray(chapter.mcqs)
+            ? chapter.mcqs.map(m => ({
+                question: m.question.trim(),
+                options: m.options.map(o => o.trim()),
+                answerIndex: m.answerIndex,
+                difficulty: String(m.difficulty || "easy").trim().toLowerCase()
+            }))
+            : [],
+        flips: Array.isArray(chapter.flips)
+            ? chapter.flips.map(f => ({
+                front: f.front.trim(),
+                back: f.back.trim()
+            }))
+            : []
+    };
+}
+
+async function getCourseById(courseId) {
+    const result = await db.send(new GetCommand({
+        TableName: TABLE,
+        Key: { id: courseId }
+    }));
+    return result.Item || null;
+}
+
+function getPathname(eventPath = "") {
+    return String(eventPath).split("?")[0];
+}
+
 exports.handler = async (event) => {
     try {
         if (event.httpMethod === "OPTIONS") {
@@ -108,8 +166,11 @@ exports.handler = async (event) => {
         }
 
         const u = user(event);
+        const pathname = getPathname(event.path);
+        const chapterCollectionMatch = pathname.match(/\/courses\/([^/]+)\/chapters$/);
+        const chapterItemMatch = pathname.match(/\/courses\/([^/]+)\/chapters\/([^/]+)$/);
 
-        if (event.httpMethod === "GET") {
+        if (event.httpMethod === "GET" && !chapterCollectionMatch && !chapterItemMatch) {
             const items = [];
             let lastEvaluatedKey = undefined;
             do {
@@ -128,9 +189,204 @@ exports.handler = async (event) => {
             };
         }
 
+        if (event.httpMethod === "GET" && chapterCollectionMatch) {
+            const courseId = decodeURIComponent(chapterCollectionMatch[1]);
+            const course = await getCourseById(courseId);
+            if (!course) {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Course not found" })
+                };
+            }
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json" },
+                body: JSON.stringify(Array.isArray(course.chapters) ? course.chapters : [])
+            };
+        }
+
+        if (event.httpMethod === "GET" && chapterItemMatch) {
+            const courseId = decodeURIComponent(chapterItemMatch[1]);
+            const chapterId = decodeURIComponent(chapterItemMatch[2]);
+            const course = await getCourseById(courseId);
+            if (!course) {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Course not found" })
+                };
+            }
+            const chapter = (Array.isArray(course.chapters) ? course.chapters : []).find(ch => String(ch.id) === chapterId);
+            if (!chapter) {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Chapter not found" })
+                };
+            }
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json" },
+                body: JSON.stringify(chapter)
+            };
+        }
+
         admin(u);
 
+        if (event.httpMethod === "POST" && chapterCollectionMatch) {
+            const courseId = decodeURIComponent(chapterCollectionMatch[1]);
+            const body = JSON.parse(event.body || "{}");
+            const error = validateChapter(body);
+            if (error) {
+                return {
+                    statusCode: 400,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: error })
+                };
+            }
+
+            const course = await getCourseById(courseId);
+            if (!course) {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Course not found" })
+                };
+            }
+
+            const chapters = Array.isArray(course.chapters) ? [...course.chapters] : [];
+            const chapter = normalizeChapter(body);
+            if (chapters.some(ch => String(ch.id) === chapter.id)) {
+                return {
+                    statusCode: 409,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Chapter id already exists" })
+                };
+            }
+            chapters.push(chapter);
+
+            const nextCourse = { ...course, chapters, updatedAt: new Date().toISOString() };
+            await db.send(new PutCommand({ TableName: TABLE, Item: nextCourse }));
+
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json" },
+                body: JSON.stringify(chapter)
+            };
+        }
+
+        if (event.httpMethod === "PUT" && chapterItemMatch) {
+            const courseId = decodeURIComponent(chapterItemMatch[1]);
+            const chapterId = decodeURIComponent(chapterItemMatch[2]);
+            const body = JSON.parse(event.body || "{}");
+            body.id = chapterId;
+            const error = validateChapter(body);
+            if (error) {
+                return {
+                    statusCode: 400,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: error })
+                };
+            }
+
+            const course = await getCourseById(courseId);
+            if (!course) {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Course not found" })
+                };
+            }
+
+            const chapters = Array.isArray(course.chapters) ? [...course.chapters] : [];
+            const idx = chapters.findIndex(ch => String(ch.id) === chapterId);
+            if (idx < 0) {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Chapter not found" })
+                };
+            }
+
+            const chapter = normalizeChapter(body, chapterId);
+            chapters[idx] = chapter;
+            const nextCourse = { ...course, chapters, updatedAt: new Date().toISOString() };
+            await db.send(new PutCommand({ TableName: TABLE, Item: nextCourse }));
+
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json" },
+                body: JSON.stringify(chapter)
+            };
+        }
+
+        if (event.httpMethod === "DELETE" && chapterItemMatch) {
+            const courseId = decodeURIComponent(chapterItemMatch[1]);
+            const chapterId = decodeURIComponent(chapterItemMatch[2]);
+            const course = await getCourseById(courseId);
+            if (!course) {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Course not found" })
+                };
+            }
+
+            const chapters = Array.isArray(course.chapters) ? course.chapters : [];
+            const nextChapters = chapters.filter(ch => String(ch.id) !== chapterId);
+            if (nextChapters.length === chapters.length) {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Chapter not found" })
+                };
+            }
+
+            const nextCourse = { ...course, chapters: nextChapters, updatedAt: new Date().toISOString() };
+            await db.send(new PutCommand({ TableName: TABLE, Item: nextCourse }));
+
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json" },
+                body: JSON.stringify({ ok: true, id: chapterId })
+            };
+        }
+
+        if (event.httpMethod === "DELETE") {
+            const courseId = event.pathParameters?.id || event.pathParameters?.courseId;
+            if (!courseId || !String(courseId).trim()) {
+                return {
+                    statusCode: 400,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Course id is required" })
+                };
+            }
+
+            await db.send(new DeleteCommand({
+                TableName: TABLE,
+                Key: { id: String(courseId).trim() }
+            }));
+
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json" },
+                body: JSON.stringify({ ok: true, id: String(courseId).trim() })
+            };
+        }
+
         const body = JSON.parse(event.body || "{}");
+        if (event.httpMethod === "PUT") {
+            const courseId = event.pathParameters?.id || event.pathParameters?.courseId;
+            if (!courseId || !String(courseId).trim()) {
+                return {
+                    statusCode: 400,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Course id is required" })
+                };
+            }
+            body.id = String(courseId).trim();
+        }
         const error = validateCourse(body);
         if (error) {
             return {

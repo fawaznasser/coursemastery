@@ -108,6 +108,7 @@
                     <div class="flex gap-2">
                         <button type="submit" class="rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700">Save Course</button>
                         <button id="cancelEditBtn" type="button" class="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">Cancel Edit</button>
+                        <button id="deleteCourseBtn" type="button" class="hidden rounded-lg border border-rose-700 bg-rose-600 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-rose-700">Delete Course</button>
                     </div>
                 </form>
             </section>
@@ -141,12 +142,14 @@
         const form = document.getElementById("courseForm");
         const formTitle = document.getElementById("formTitle");
         const cancelEditBtn = document.getElementById("cancelEditBtn");
+        const deleteCourseBtn = document.getElementById("deleteCourseBtn");
         const idInput = document.getElementById("courseId");
         const nameInput = document.getElementById("courseName");
         const descInput = document.getElementById("courseDescription");
         const chapterNameInput = document.getElementById("chapterNameInput");
 
         let chapters = [];
+        let editingCourseId = null;
         document.getElementById("backBtn").onclick = () => location.href = "/index.html";
         function createEmptyMcqDraft() {
             return {
@@ -159,16 +162,44 @@
         function createEmptyFlipDraft() {
             return { front: "", back: "" };
         }
-        document.getElementById("addChapterBtn").onclick = () => {
+        async function refreshEditingCourse(courseId) {
+            const courses = await API.getCourses();
+            renderCourses(courses);
+            const course = courses.find(x => String(x.id) === String(courseId));
+            if (course) {
+                setEditMode(course);
+            } else {
+                resetForm();
+            }
+        }
+
+        document.getElementById("addChapterBtn").onclick = async () => {
             const name = chapterNameInput.value.trim();
             if (!name || !name.trim()) return;
-            chapters.push({
+            const chapter = {
                 id: crypto.randomUUID(),
                 name: name.trim(),
                 mcqs: [],
                 flips: [],
                 ui: { showMcqEditor: false, showFlipEditor: false, mcqDraft: createEmptyMcqDraft(), flipDraft: createEmptyFlipDraft() }
-            });
+            };
+
+            if (editingCourseId) {
+                status.textContent = "Adding chapter...";
+                try {
+                    await API.addCourseChapter(editingCourseId, chapter);
+                    chapterNameInput.value = "";
+                    await refreshEditingCourse(editingCourseId);
+                    status.textContent = "Chapter added.";
+                } catch (err) {
+                    console.error("ADD CHAPTER ERROR:", err);
+                    status.textContent = "Failed to add chapter.";
+                    adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
+                }
+                return;
+            }
+
+            chapters.push(chapter);
             chapterNameInput.value = "";
             renderChapters();
         };
@@ -210,10 +241,11 @@
             chaptersBox.innerHTML = chapters.map(ch => `
                 <div class="action-card rounded-lg border border-blue-100 bg-white p-3" data-ch-id="${esc(ch.id)}">
                     <div class="mb-2 flex items-center justify-between">
-                        <div class="font-extrabold text-blue-950">${esc(ch.name)}</div>
+                        <input data-ch-name="${esc(ch.id)}" class="field rounded border border-slate-200 px-2 py-1 text-sm font-bold text-blue-950" value="${esc(ch.name)}" />
                         <div class="rounded bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">MCQ: ${ch.mcqs.length} | Flip: ${ch.flips.length}</div>
                     </div>
                     <div class="mb-2 flex flex-wrap gap-2">
+                        <button type="button" class="rounded border border-cyan-700 bg-cyan-600 px-2 py-1 text-xs font-bold text-white hover:bg-cyan-700" data-save-ch="${esc(ch.id)}">Save Chapter</button>
                         <button type="button" class="rounded border border-blue-700 bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700" data-toggle-mcq="${esc(ch.id)}">${ch.ui.showMcqEditor ? "Close MCQ" : "Add MCQ"}</button>
                         <button type="button" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50" data-toggle-flip="${esc(ch.id)}">${ch.ui.showFlipEditor ? "Close Flip" : "Add Flip Card"}</button>
                         <button type="button" class="rounded border border-rose-700 bg-rose-600 px-2 py-1 text-xs font-bold text-white hover:bg-rose-700" data-del-ch="${esc(ch.id)}">Delete Chapter</button>
@@ -334,9 +366,58 @@
             });
 
             chaptersBox.querySelectorAll("[data-del-ch]").forEach(btn => {
-                btn.onclick = () => {
+                btn.onclick = async () => {
                     const id = btn.getAttribute("data-del-ch");
+                    if (editingCourseId) {
+                        const ok = confirm("Delete this chapter? This cannot be undone.");
+                        if (!ok) return;
+                        status.textContent = "Deleting chapter...";
+                        try {
+                            await API.deleteCourseChapter(editingCourseId, id);
+                            await refreshEditingCourse(editingCourseId);
+                            status.textContent = "Chapter deleted.";
+                        } catch (err) {
+                            console.error("DELETE CHAPTER ERROR:", err);
+                            status.textContent = "Failed to delete chapter.";
+                            adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
+                        }
+                        return;
+                    }
                     chapters = chapters.filter(x => x.id !== id);
+                    renderChapters();
+                };
+            });
+
+            chaptersBox.querySelectorAll("[data-save-ch]").forEach(btn => {
+                btn.onclick = async () => {
+                    const id = btn.getAttribute("data-save-ch");
+                    const ch = chapters.find(x => x.id === id);
+                    if (!ch) return;
+
+                    const nameInputEl = chaptersBox.querySelector(`[data-ch-name="${id}"]`);
+                    const nextName = nameInputEl?.value.trim() || "";
+                    if (!nextName) return alert("Chapter name is required.");
+                    ch.name = nextName;
+
+                    if (editingCourseId) {
+                        status.textContent = "Saving chapter...";
+                        try {
+                            await API.updateCourseChapter(editingCourseId, id, {
+                                id: ch.id,
+                                name: ch.name,
+                                mcqs: ch.mcqs,
+                                flips: ch.flips
+                            });
+                            await refreshEditingCourse(editingCourseId);
+                            status.textContent = "Chapter saved.";
+                        } catch (err) {
+                            console.error("SAVE CHAPTER ERROR:", err);
+                            status.textContent = "Failed to save chapter.";
+                            adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
+                        }
+                        return;
+                    }
+
                     renderChapters();
                 };
             });
@@ -345,16 +426,19 @@
         function resetForm() {
             form.reset();
             idInput.readOnly = false;
+            editingCourseId = null;
             chapters = [];
             renderChapters();
             formTitle.textContent = "Add Course";
             cancelEditBtn.classList.add("hidden");
+            deleteCourseBtn.classList.add("hidden");
         }
 
         function setEditMode(course) {
             formTitle.textContent = `Edit Course: ${course.id}`;
             idInput.value = course.id || "";
             idInput.readOnly = true;
+            editingCourseId = course.id || null;
             nameInput.value = course.name || "";
             descInput.value = course.description || "";
             const source = Array.isArray(course.chapters) ? course.chapters : [];
@@ -374,6 +458,7 @@
             }));
             renderChapters();
             cancelEditBtn.classList.remove("hidden");
+            deleteCourseBtn.classList.remove("hidden");
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
 
@@ -426,6 +511,22 @@
         }
 
         cancelEditBtn.onclick = resetForm;
+        deleteCourseBtn.onclick = async () => {
+            if (!editingCourseId) return;
+            const ok = confirm(`Delete course "${editingCourseId}"? This cannot be undone.`);
+            if (!ok) return;
+            status.textContent = "Deleting course...";
+            try {
+                await API.deleteCourse(editingCourseId);
+                resetForm();
+                await loadCourses();
+                status.textContent = `Deleted course ${editingCourseId}.`;
+            } catch (err) {
+                console.error("DELETE COURSE ERROR:", err);
+                status.textContent = "Failed to delete course.";
+                adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
+            }
+        };
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const payload = {
@@ -434,14 +535,19 @@
                 description: descInput.value,
                 chapters
             };
-            status.textContent = "Saving course...";
+            const isEdit = Boolean(editingCourseId);
+            status.textContent = isEdit ? "Updating course..." : "Saving course...";
             try {
-                await API.saveCourse(payload);
+                if (isEdit) {
+                    await API.updateCourse(editingCourseId, payload);
+                } else {
+                    await API.saveCourse(payload);
+                }
                 resetForm();
                 await loadCourses();
             } catch (err) {
                 console.error("SAVE COURSE ERROR:", err);
-                status.textContent = "Failed to save course.";
+                status.textContent = isEdit ? "Failed to update course." : "Failed to save course.";
                 adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
             }
         });
@@ -458,4 +564,3 @@
 </body>
 
 </html>
-

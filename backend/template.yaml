@@ -68,6 +68,27 @@ Resources:
             Method: ANY
             Auth:
               Authorizer: CognitoAuthorizer
+        ApiById:
+          Type: Api
+          Properties:
+            Path: /courses/{id}
+            Method: ANY
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ApiChapters:
+          Type: Api
+          Properties:
+            Path: /courses/{id}/chapters
+            Method: ANY
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ApiChapterById:
+          Type: Api
+          Properties:
+            Path: /courses/{id}/chapters/{chapterId}
+            Method: ANY
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   ProgressFn:
     Type: AWS::Serverless::Function

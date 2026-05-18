@@ -24,6 +24,12 @@ async function request(path, method = "GET", body) {
 export const API = {
     getCourses: () => request("/courses"),
     saveCourse: (c) => request("/courses", "POST", c),
+    updateCourse: (id, c) => request(`/courses/${encodeURIComponent(id)}`, "PUT", c),
+    deleteCourse: (id) => request(`/courses/${encodeURIComponent(id)}`, "DELETE"),
+    getCourseChapters: (courseId) => request(`/courses/${encodeURIComponent(courseId)}/chapters`),
+    addCourseChapter: (courseId, chapter) => request(`/courses/${encodeURIComponent(courseId)}/chapters`, "POST", chapter),
+    updateCourseChapter: (courseId, chapterId, chapter) => request(`/courses/${encodeURIComponent(courseId)}/chapters/${encodeURIComponent(chapterId)}`, "PUT", chapter),
+    deleteCourseChapter: (courseId, chapterId) => request(`/courses/${encodeURIComponent(courseId)}/chapters/${encodeURIComponent(chapterId)}`, "DELETE"),
     getProgress: (id) => request(`/progress/${id}`),
     saveProgress: (id, d) => request(`/progress/${id}`, "POST", d)
 };

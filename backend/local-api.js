@@ -32,13 +32,13 @@ function loadHandler(moduleName, tableName) {
     return require(fullPath).handler;
 }
 
-function toEvent(req, body, routeMatch) {
+function toEvent(req, body, routeParams) {
     return {
         httpMethod: req.method,
         path: req.url,
         headers: req.headers || {},
         body: body.length ? body : null,
-        pathParameters: routeMatch ? { courseId: decodeURIComponent(routeMatch[1]) } : null,
+        pathParameters: routeParams || null,
         requestContext: {}
     };
 }
@@ -76,10 +76,13 @@ async function main() {
             });
 
             const pathname = new URL(req.url, "http://localhost").pathname;
+            const courseMatch = pathname.match(/^\/courses\/([^/]+)$/);
+            const courseChaptersMatch = pathname.match(/^\/courses\/([^/]+)\/chapters$/);
+            const courseChapterItemMatch = pathname.match(/^\/courses\/([^/]+)\/chapters\/([^/]+)$/);
             const progressMatch = pathname.match(/^\/progress\/([^/]+)$/);
 
             let handler;
-            if (pathname === "/courses") {
+            if (pathname === "/courses" || courseMatch || courseChaptersMatch || courseChapterItemMatch) {
                 handler = loadHandler("courses.js", coursesTable);
             } else if (progressMatch) {
                 handler = loadHandler("progress.js", progressTable);
@@ -89,7 +92,27 @@ async function main() {
                 return;
             }
 
-            const event = toEvent(req, body, progressMatch);
+            let routeParams = null;
+            if (courseChapterItemMatch) {
+                routeParams = {
+                    id: decodeURIComponent(courseChapterItemMatch[1]),
+                    courseId: decodeURIComponent(courseChapterItemMatch[1]),
+                    chapterId: decodeURIComponent(courseChapterItemMatch[2])
+                };
+            } else if (courseChaptersMatch) {
+                routeParams = {
+                    id: decodeURIComponent(courseChaptersMatch[1]),
+                    courseId: decodeURIComponent(courseChaptersMatch[1])
+                };
+            } else if (courseMatch) {
+                routeParams = {
+                    id: decodeURIComponent(courseMatch[1]),
+                    courseId: decodeURIComponent(courseMatch[1])
+                };
+            } else if (progressMatch) {
+                routeParams = { courseId: decodeURIComponent(progressMatch[1]) };
+            }
+            const event = toEvent(req, body, routeParams);
             const result = await handler(event);
 
             res.writeHead(result.statusCode || 200, result.headers || {});
