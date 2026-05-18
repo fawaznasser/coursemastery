@@ -62,6 +62,7 @@ async function main() {
     }
 
     const port = Number(process.env.LOCAL_API_PORT || 3001);
+    const host = process.env.LOCAL_API_HOST || "0.0.0.0";
 
     const server = http.createServer(async (req, res) => {
         try {
@@ -100,8 +101,8 @@ async function main() {
         }
     });
 
-    server.listen(port, "127.0.0.1", () => {
-        console.log(`Local backend running: http://127.0.0.1:${port}`);
+    server.listen(port, host, () => {
+        console.log(`Local backend running: http://${host}:${port}`);
         console.log(`Courses table: ${coursesTable}`);
         console.log(`Progress table: ${progressTable}`);
     });
