@@ -82,7 +82,7 @@ async function main() {
             const progressMatch = pathname.match(/^\/progress\/([^/]+)$/);
 
             let handler;
-            if (pathname === "/courses" || courseMatch || courseChaptersMatch || courseChapterItemMatch) {
+            if (pathname === "/courses" || pathname === "/settings" || courseMatch || courseChaptersMatch || courseChapterItemMatch) {
                 handler = loadHandler("courses.js", coursesTable);
             } else if (progressMatch) {
                 handler = loadHandler("progress.js", progressTable);

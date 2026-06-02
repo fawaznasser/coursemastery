@@ -62,13 +62,37 @@
             transform: translateY(-1px);
             box-shadow: 0 10px 24px rgba(2, 132, 199, 0.13);
         }
+
+        @media (max-width: 640px) {
+            body {
+                background-attachment: scroll;
+            }
+
+            .admin-panel {
+                padding: 1rem;
+            }
+
+            .chapter-add-row,
+            .form-actions,
+            .course-card-actions,
+            .chapter-card-actions {
+                flex-direction: column;
+            }
+
+            .chapter-add-row > *,
+            .form-actions > *,
+            .course-card-actions > *,
+            .chapter-card-actions > * {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 
 <body class="min-h-screen font-sans text-ink">
     <div class="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-8">
         <header class="mb-5 rounded-lg border border-blue-200/80 bg-white/95 p-4 shadow-soft backdrop-blur">
-            <div class="flex items-center gap-3">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div class="mr-auto">
                     <h1 class="bg-gradient-to-r from-cyan-700 to-blue-800 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">CourseMastery Admin</h1>
                     <p class="text-xs font-semibold text-blue-800">Course and assessment content workspace</p>
@@ -98,14 +122,14 @@
                         <div class="mb-2 flex items-center justify-between">
                             <h3 class="font-extrabold text-blue-950">Chapters</h3>
                         </div>
-                        <div class="mb-3 flex gap-2">
+                        <div class="chapter-add-row mb-3 flex gap-2">
                             <input id="chapterNameInput" class="field w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-bluex focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Chapter name" />
                             <button id="addChapterBtn" type="button" class="rounded border border-blue-700 bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700">Add Chapter</button>
                         </div>
                         <div id="chapters" class="space-y-3"></div>
                     </div>
 
-                    <div class="flex gap-2">
+                    <div class="form-actions flex gap-2">
                         <button type="submit" class="rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700">Save Course</button>
                         <button id="cancelEditBtn" type="button" class="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">Cancel Edit</button>
                         <button id="deleteCourseBtn" type="button" class="hidden rounded-lg border border-rose-700 bg-rose-600 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-rose-700">Delete Course</button>
@@ -115,14 +139,63 @@
 
             <section class="admin-panel rounded-lg border border-cyan-200 p-4 shadow-card md:p-5">
                 <div id="status" class="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-900">Ready</div>
+                <section class="mb-4 rounded-lg border border-amber-200 bg-amber-50/70 p-4">
+                    <div class="mb-3">
+                        <h2 class="text-lg font-extrabold text-amber-950">Ad Placements</h2>
+                        <p class="text-xs font-semibold text-amber-800">These sections are visible on the study page for admin users only.</p>
+                    </div>
+                    <form id="adsForm" class="space-y-4">
+                        <div class="rounded-lg border border-amber-200 bg-white p-3">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <h3 class="font-extrabold text-slate-950">Hero Banner</h3>
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-700"><input id="heroEnabled" type="checkbox" class="h-4 w-4" /> Enabled</label>
+                            </div>
+                            <div class="grid gap-2">
+                                <div class="rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-3">
+                                    <div class="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-amber-700">Upload Image</div>
+                                    <input id="heroImageFile" type="file" accept="image/*" class="block w-full text-sm" />
+                                    <img id="heroImagePreview" class="mt-3 hidden h-32 w-full rounded-lg object-cover" alt="Hero ad preview" />
+                                </div>
+                                <input id="heroEyebrow" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Eyebrow" />
+                                <input id="heroTitle" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Title" />
+                                <textarea id="heroDescription" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" rows="3" placeholder="Description"></textarea>
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <input id="heroMeta" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Meta label" />
+                                    <input id="heroCta" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="CTA label" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rounded-lg border border-amber-200 bg-white p-3">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <h3 class="font-extrabold text-slate-950">Sidebar Ad</h3>
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-700"><input id="sidebarEnabled" type="checkbox" class="h-4 w-4" /> Enabled</label>
+                            </div>
+                            <div class="grid gap-2">
+                                <div class="rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-3">
+                                    <div class="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-amber-700">Upload Image</div>
+                                    <input id="sidebarImageFile" type="file" accept="image/*" class="block w-full text-sm" />
+                                    <img id="sidebarImagePreview" class="mt-3 hidden h-32 w-full rounded-lg object-cover" alt="Sidebar ad preview" />
+                                </div>
+                                <input id="sidebarEyebrow" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Eyebrow" />
+                                <input id="sidebarTitle" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Title" />
+                                <textarea id="sidebarDescription" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" rows="3" placeholder="Description"></textarea>
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <input id="sidebarMeta" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Meta label" />
+                                    <input id="sidebarCta" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="CTA label" />
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="rounded-lg border border-amber-700 bg-amber-500 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-600">Save Ad Settings</button>
+                    </form>
+                </section>
                 <div id="admin" class="space-y-3"></div>
             </section>
         </div>
     </div>
 
     <script type="module">
-        import { parseAuth, getUser, isAdmin, login } from "./auth.js?v=AUTH17";
-        import { API } from "./api.js?v=AUTH17";
+        import { parseAuth, getUser, isAdmin, login } from "./auth.js?v=AUTH19";
+        import { API } from "./api.js?v=AUTH19";
 
         await parseAuth();
         const user = getUser();
@@ -147,9 +220,30 @@
         const nameInput = document.getElementById("courseName");
         const descInput = document.getElementById("courseDescription");
         const chapterNameInput = document.getElementById("chapterNameInput");
+        const adsForm = document.getElementById("adsForm");
+        const heroEnabled = document.getElementById("heroEnabled");
+        const heroEyebrow = document.getElementById("heroEyebrow");
+        const heroTitle = document.getElementById("heroTitle");
+        const heroDescription = document.getElementById("heroDescription");
+        const heroMeta = document.getElementById("heroMeta");
+        const heroCta = document.getElementById("heroCta");
+        const heroImageFile = document.getElementById("heroImageFile");
+        const heroImagePreview = document.getElementById("heroImagePreview");
+        const sidebarEnabled = document.getElementById("sidebarEnabled");
+        const sidebarEyebrow = document.getElementById("sidebarEyebrow");
+        const sidebarTitle = document.getElementById("sidebarTitle");
+        const sidebarDescription = document.getElementById("sidebarDescription");
+        const sidebarMeta = document.getElementById("sidebarMeta");
+        const sidebarCta = document.getElementById("sidebarCta");
+        const sidebarImageFile = document.getElementById("sidebarImageFile");
+        const sidebarImagePreview = document.getElementById("sidebarImagePreview");
 
         let chapters = [];
         let editingCourseId = null;
+        let siteSettings = null;
+        let heroImageUrl = "";
+        let sidebarImageUrl = "";
+        const MAX_SETTINGS_IMAGE_BYTES = 220 * 1024;
         document.getElementById("backBtn").onclick = () => location.href = "/index.html";
         function createEmptyMcqDraft() {
             return {
@@ -244,7 +338,7 @@
                         <input data-ch-name="${esc(ch.id)}" class="field rounded border border-slate-200 px-2 py-1 text-sm font-bold text-blue-950" value="${esc(ch.name)}" />
                         <div class="rounded bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">MCQ: ${ch.mcqs.length} | Flip: ${ch.flips.length}</div>
                     </div>
-                    <div class="mb-2 flex flex-wrap gap-2">
+                    <div class="chapter-card-actions mb-2 flex flex-wrap gap-2">
                         <button type="button" class="rounded border border-cyan-700 bg-cyan-600 px-2 py-1 text-xs font-bold text-white hover:bg-cyan-700" data-save-ch="${esc(ch.id)}">Save Chapter</button>
                         <button type="button" class="rounded border border-blue-700 bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700" data-toggle-mcq="${esc(ch.id)}">${ch.ui.showMcqEditor ? "Close MCQ" : "Add MCQ"}</button>
                         <button type="button" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50" data-toggle-flip="${esc(ch.id)}">${ch.ui.showFlipEditor ? "Close Flip" : "Add Flip Card"}</button>
@@ -434,6 +528,75 @@
             deleteCourseBtn.classList.add("hidden");
         }
 
+        function fillAdsForm(settings) {
+            const hero = settings?.ads?.hero || {};
+            const sidebar = settings?.ads?.sidebar || {};
+            heroEnabled.checked = hero.enabled !== false;
+            heroEyebrow.value = hero.eyebrow || "";
+            heroTitle.value = hero.title || "";
+            heroDescription.value = hero.description || "";
+            heroMeta.value = hero.meta || "";
+            heroCta.value = hero.cta || "";
+            heroImageUrl = hero.imageUrl || "";
+            heroImagePreview.src = heroImageUrl;
+            heroImagePreview.classList.toggle("hidden", !heroImageUrl);
+            sidebarEnabled.checked = sidebar.enabled !== false;
+            sidebarEyebrow.value = sidebar.eyebrow || "";
+            sidebarTitle.value = sidebar.title || "";
+            sidebarDescription.value = sidebar.description || "";
+            sidebarMeta.value = sidebar.meta || "";
+            sidebarCta.value = sidebar.cta || "";
+            sidebarImageUrl = sidebar.imageUrl || "";
+            sidebarImagePreview.src = sidebarImageUrl;
+            sidebarImagePreview.classList.toggle("hidden", !sidebarImageUrl);
+        }
+
+        function dataUrlBytes(dataUrl) {
+            const base64 = String(dataUrl || "").split(",")[1] || "";
+            return Math.ceil((base64.length * 3) / 4);
+        }
+
+        function loadImageFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const objectUrl = URL.createObjectURL(file);
+                const image = new Image();
+                image.onload = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve(image);
+                };
+                image.onerror = (err) => {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(err);
+                };
+                image.src = objectUrl;
+            });
+        }
+
+        async function fileToDataUrl(file, targetWidth, quality = 0.82) {
+            const image = await loadImageFromFile(file);
+            const scale = Math.min(1, targetWidth / image.width);
+            const width = Math.max(1, Math.round(image.width * scale));
+            const height = Math.max(1, Math.round(image.height * scale));
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext("2d");
+            context.drawImage(image, 0, 0, width, height);
+
+            let outputQuality = quality;
+            let dataUrl = canvas.toDataURL("image/jpeg", outputQuality);
+            while (dataUrlBytes(dataUrl) > MAX_SETTINGS_IMAGE_BYTES && outputQuality > 0.45) {
+                outputQuality -= 0.08;
+                dataUrl = canvas.toDataURL("image/jpeg", outputQuality);
+            }
+
+            if (dataUrlBytes(dataUrl) > MAX_SETTINGS_IMAGE_BYTES) {
+                throw new Error("Image is still too large after compression. Use a smaller image.");
+            }
+
+            return dataUrl;
+        }
+
         function setEditMode(course) {
             formTitle.textContent = `Edit Course: ${course.id}`;
             idInput.value = course.id || "";
@@ -478,7 +641,7 @@
                                 <div class="text-sm font-extrabold text-blue-950">${esc(c.name || "(untitled)")}</div>
                                 <div class="font-mono text-[11px] font-semibold text-cyan-700">ID ${esc(c.id || "n/a")}</div>
                             </div>
-                            <div class="flex gap-2">
+                            <div class="course-card-actions flex flex-wrap gap-2">
                                 <button class="rounded border border-blue-700 bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700" data-open-id="${esc(c.id || "")}">Open</button>
                                 <button class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50" data-edit-id="${esc(c.id || "")}">Edit</button>
                                 <button class="rounded border border-rose-700 bg-rose-600 px-2 py-1 text-xs font-bold text-white hover:bg-rose-700" data-delete-id="${esc(c.id || "")}">Delete</button>
@@ -531,6 +694,77 @@
         }
 
         cancelEditBtn.onclick = resetForm;
+        heroImageFile.addEventListener("change", async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+                heroImageUrl = await fileToDataUrl(file, 1200, 0.82);
+                heroImagePreview.src = heroImageUrl;
+                heroImagePreview.classList.remove("hidden");
+                status.textContent = "Hero image prepared.";
+            } catch (err) {
+                console.error("HERO IMAGE ERROR:", err);
+                heroImageUrl = "";
+                heroImageFile.value = "";
+                heroImagePreview.src = "";
+                heroImagePreview.classList.add("hidden");
+                status.textContent = err.message || "Failed to prepare hero image.";
+            }
+        });
+
+        sidebarImageFile.addEventListener("change", async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+                sidebarImageUrl = await fileToDataUrl(file, 480, 0.8);
+                sidebarImagePreview.src = sidebarImageUrl;
+                sidebarImagePreview.classList.remove("hidden");
+                status.textContent = "Sidebar image prepared.";
+            } catch (err) {
+                console.error("SIDEBAR IMAGE ERROR:", err);
+                sidebarImageUrl = "";
+                sidebarImageFile.value = "";
+                sidebarImagePreview.src = "";
+                sidebarImagePreview.classList.add("hidden");
+                status.textContent = err.message || "Failed to prepare sidebar image.";
+            }
+        });
+
+        adsForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const payload = {
+                ads: {
+                    hero: {
+                        enabled: heroEnabled.checked,
+                        eyebrow: heroEyebrow.value.trim(),
+                        title: heroTitle.value.trim(),
+                        description: heroDescription.value.trim(),
+                        meta: heroMeta.value.trim(),
+                        cta: heroCta.value.trim(),
+                        imageUrl: heroImageUrl
+                    },
+                    sidebar: {
+                        enabled: sidebarEnabled.checked,
+                        eyebrow: sidebarEyebrow.value.trim(),
+                        title: sidebarTitle.value.trim(),
+                        description: sidebarDescription.value.trim(),
+                        meta: sidebarMeta.value.trim(),
+                        cta: sidebarCta.value.trim(),
+                        imageUrl: sidebarImageUrl
+                    }
+                }
+            };
+            status.textContent = "Saving ad settings...";
+            try {
+                siteSettings = await API.saveSettings(payload);
+                fillAdsForm(siteSettings);
+                status.textContent = "Ad settings saved.";
+            } catch (err) {
+                console.error("SAVE SETTINGS ERROR:", err);
+                status.textContent = "Failed to save ad settings.";
+                adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
+            }
+        });
         deleteCourseBtn.onclick = async () => {
             if (!editingCourseId) return;
             const ok = confirm(`Delete course "${editingCourseId}"? This cannot be undone.`);
@@ -574,6 +808,12 @@
 
         resetForm();
         try {
+            try {
+                siteSettings = await API.getSettings();
+                fillAdsForm(siteSettings);
+            } catch (err) {
+                console.error("SETTINGS LOAD ERROR:", err);
+            }
             await loadCourses();
         } catch (err) {
             console.error("ADMIN API ERROR:", err);

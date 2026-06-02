@@ -126,6 +126,59 @@ function normalizeCourse(body) {
     };
 }
 
+const SETTINGS_ID = "__site_settings__";
+
+function defaultSettings() {
+    return {
+        id: SETTINGS_ID,
+        type: "settings",
+        ads: {
+            hero: {
+                enabled: true,
+                eyebrow: "Admin Only Ad Placement",
+                title: "Hero Banner Slot",
+                description: "Use this area for featured promotions without disrupting the learning flow.",
+                cta: "Campaign Preview",
+                meta: "1200 x 240 recommended"
+            },
+            sidebar: {
+                enabled: true,
+                eyebrow: "Admin Only",
+                title: "Sidebar Ad Slot",
+                description: "Reserved for admin-managed campaigns, announcements, or partner banners.",
+                cta: "Preview",
+                meta: "Sponsored Placement"
+            }
+        },
+        updatedAt: null
+    };
+}
+
+function normalizeAdBlock(block, fallback) {
+    return {
+        enabled: block?.enabled !== false,
+        eyebrow: String(block?.eyebrow || fallback.eyebrow || "").trim(),
+        title: String(block?.title || fallback.title || "").trim(),
+        description: String(block?.description || fallback.description || "").trim(),
+        cta: String(block?.cta || fallback.cta || "").trim(),
+        meta: String(block?.meta || fallback.meta || "").trim(),
+        imageUrl: typeof block?.imageUrl === "string" ? block.imageUrl.trim() : (fallback.imageUrl || "")
+    };
+}
+
+function normalizeSettings(body) {
+    const defaults = defaultSettings();
+    return {
+        id: SETTINGS_ID,
+        type: "settings",
+        ads: {
+            hero: normalizeAdBlock(body?.ads?.hero, defaults.ads.hero),
+            sidebar: normalizeAdBlock(body?.ads?.sidebar, defaults.ads.sidebar)
+        },
+        updatedAt: new Date().toISOString()
+    };
+}
+
 function normalizeChapter(chapter, fallbackId) {
     return {
         id: String(chapter.id || fallbackId || "").trim() || `ch-${Date.now()}`,
@@ -167,8 +220,18 @@ exports.handler = async (event) => {
 
         const u = user(event);
         const pathname = getPathname(event.path);
+        const settingsMatch = pathname === "/settings";
         const chapterCollectionMatch = pathname.match(/\/courses\/([^/]+)\/chapters$/);
         const chapterItemMatch = pathname.match(/\/courses\/([^/]+)\/chapters\/([^/]+)$/);
+
+        if (event.httpMethod === "GET" && settingsMatch) {
+            const settings = await getCourseById(SETTINGS_ID);
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json" },
+                body: JSON.stringify(settings || defaultSettings())
+            };
+        }
 
         if (event.httpMethod === "GET" && !chapterCollectionMatch && !chapterItemMatch) {
             const items = [];
@@ -178,7 +241,7 @@ exports.handler = async (event) => {
                     TableName: TABLE,
                     ExclusiveStartKey: lastEvaluatedKey
                 }));
-                items.push(...(result.Items || []));
+                items.push(...(result.Items || []).filter((item) => item?.id !== SETTINGS_ID));
                 lastEvaluatedKey = result.LastEvaluatedKey;
             } while (lastEvaluatedKey);
 
@@ -233,6 +296,17 @@ exports.handler = async (event) => {
         }
 
         admin(u);
+
+        if (event.httpMethod === "PUT" && settingsMatch) {
+            const body = JSON.parse(event.body || "{}");
+            const settings = normalizeSettings(body);
+            await db.send(new PutCommand({ TableName: TABLE, Item: settings }));
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json" },
+                body: JSON.stringify(settings)
+            };
+        }
 
         if (event.httpMethod === "POST" && chapterCollectionMatch) {
             const courseId = decodeURIComponent(chapterCollectionMatch[1]);
@@ -407,8 +481,17 @@ exports.handler = async (event) => {
     } catch (err) {
         console.error("COURSES ERROR:", err);
 
-        const statusCode = err === "Forbidden" ? 403 : err === "Unauthorized" ? 401 : 500;
-        const message = err === "Forbidden" ? "Forbidden" : err === "Unauthorized" ? "Unauthorized" : "Internal server error";
+        const isForbidden = err === "Forbidden";
+        const isUnauthorized = err === "Unauthorized";
+        const isValidation = err?.name === "ValidationException" || String(err?.message || "").includes("Item size");
+        const statusCode = isForbidden ? 403 : isUnauthorized ? 401 : isValidation ? 400 : 500;
+        const message = isForbidden
+            ? "Forbidden"
+            : isUnauthorized
+                ? "Unauthorized"
+                : isValidation
+                    ? "Payload too large for settings storage. Use a smaller image."
+                    : "Internal server error";
 
         return {
             statusCode,

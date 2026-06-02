@@ -80,6 +80,29 @@
             transform: translateY(-1px);
             box-shadow: 0 10px 24px rgba(2, 132, 199, 0.14);
         }
+        @media (max-width: 640px) {
+            body {
+                background-attachment: scroll;
+            }
+
+            header button {
+                width: 100%;
+            }
+
+            #status {
+                font-size: 0.8125rem;
+            }
+
+            #courses {
+                gap: 0.625rem;
+            }
+
+            #courses a,
+            .answer-option,
+            [data-flip-card] {
+                min-width: 0;
+            }
+        }
     </style>
 </head>
 
@@ -124,7 +147,12 @@
                     <h2 class="text-sm font-extrabold text-blue-950">Course Library</h2>
                     <span class="rounded bg-blue-50 px-2 py-0.5 font-mono text-[11px] text-blue-700">choose one</span>
                 </div>
+                <div class="mb-3">
+                    <label for="courseSearch" class="mb-1 block text-[11px] font-extrabold uppercase tracking-[0.18em] text-cyan-700">Search Courses</label>
+                    <input id="courseSearch" type="search" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-100" placeholder="Search by course name or ID" />
+                </div>
                 <div id="courses" class="grid gap-2"></div>
+                <div id="adminAdSidebar" class="mt-3"></div>
             </aside>
             <main id="selectedCourse"></main>
         </div>
@@ -137,8 +165,8 @@
             login,
             logout,
             isAdmin
-        } from "./auth.js?v=AUTH17";
-        import { API } from "./api.js?v=AUTH17";
+        } from "./auth.js?v=AUTH19";
+        import { API } from "./api.js?v=AUTH19";
 
         const LEVELS = ["easy", "medium", "hard"];
         const LEVEL_WEIGHT = { easy: 1, medium: 2, hard: 3 };
@@ -161,14 +189,21 @@
         const statusEl = document.getElementById("status");
         const selectedBox = document.getElementById("selectedCourse");
         const coursesBox = document.getElementById("courses");
+        const courseSearchInput = document.getElementById("courseSearch");
+        const adminAdSidebar = document.getElementById("adminAdSidebar");
         const statCourses = document.getElementById("statCourses");
         const statLevel = document.getElementById("statLevel");
         const statUnderstanding = document.getElementById("statUnderstanding");
         const statAnswered = document.getElementById("statAnswered");
 
         let courses = [];
+        let courseSearchQuery = "";
         let selectedCourse = null;
         let progressRecord = null;
+        let studyView = "assessment";
+        let flipCardIndex = 0;
+        let flipCardRevealed = false;
+        let siteSettings = null;
         let adaptive = {
             bank: [],
             remaining: [],
@@ -196,6 +231,77 @@
             const mcq = chapters.reduce((n, c) => n + (Array.isArray(c.mcqs) ? c.mcqs.length : 0), 0);
             const flip = chapters.reduce((n, c) => n + (Array.isArray(c.flips) ? c.flips.length : 0), 0);
             return { chapters: chapters.length, mcq, flip };
+        }
+
+        function flattenFlipCards(course) {
+            const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+            return chapters.flatMap((chapter, chapterIndex) => {
+                const chapterName = chapter?.name || `Chapter ${chapterIndex + 1}`;
+                const flips = Array.isArray(chapter?.flips) ? chapter.flips : [];
+                return flips.map((flip, flipIndex) => ({
+                    id: `${chapter?.id || `ch-${chapterIndex + 1}`}-flip-${flipIndex}`,
+                    chapterName,
+                    front: flip?.front || "",
+                    back: flip?.back || ""
+                }));
+            });
+        }
+
+        function clampFlipCardIndex(cards) {
+            if (!cards.length) {
+                flipCardIndex = 0;
+                return;
+            }
+            if (flipCardIndex < 0) flipCardIndex = cards.length - 1;
+            if (flipCardIndex >= cards.length) flipCardIndex = 0;
+        }
+
+        function renderAdminAdSidebar() {
+            if (!canManageCourses) return "";
+            const ad = siteSettings?.ads?.sidebar;
+            if (ad?.enabled === false) return "";
+            return `
+                <section class="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-3 shadow-card">
+                    <div class="mb-2 flex items-center justify-between gap-2">
+                        <div>
+                            <div class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-amber-700">${esc(ad?.eyebrow || "Admin Only")}</div>
+                            <h3 class="text-sm font-extrabold text-amber-950">${esc(ad?.title || "Sidebar Ad Slot")}</h3>
+                        </div>
+                        <span class="rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700">${esc(ad?.cta || "Preview")}</span>
+                    </div>
+                    <div class="rounded-lg border border-dashed border-amber-300 bg-white/90 p-4 text-center">
+                        ${ad?.imageUrl ? `
+                            <img src="${esc(ad.imageUrl)}" alt="${esc(ad?.title || "Sidebar ad")}" class="mb-3 h-32 w-full rounded-lg object-cover" />
+                        ` : ""}
+                        <div class="text-sm font-extrabold text-slate-900">${esc(ad?.meta || "Sponsored Placement")}</div>
+                        <div class="mt-1 text-xs font-medium text-slate-600">${esc(ad?.description || "Reserved for admin-managed campaigns, announcements, or partner banners.")}</div>
+                    </div>
+                </section>
+            `;
+        }
+
+        function renderAdminAdBanner() {
+            if (!canManageCourses) return "";
+            const ad = siteSettings?.ads?.hero;
+            if (ad?.enabled === false) return "";
+            return `
+                <section class="mb-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-cyan-50 p-4 shadow-card">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-amber-700">${esc(ad?.eyebrow || "Admin Only Ad Placement")}</div>
+                            <h3 class="mt-1 text-lg font-extrabold text-slate-950">${esc(ad?.title || "Hero Banner Slot")}</h3>
+                            <p class="mt-1 text-sm font-medium text-slate-600">${esc(ad?.description || "Use this area for featured promotions without disrupting the learning flow.")}</p>
+                        </div>
+                        <div class="rounded-xl border border-dashed border-amber-300 bg-white px-4 py-3 text-center shadow-sm">
+                            ${ad?.imageUrl ? `
+                                <img src="${esc(ad.imageUrl)}" alt="${esc(ad?.title || "Hero ad")}" class="mb-3 h-24 w-full rounded-lg object-cover sm:w-72" />
+                            ` : ""}
+                            <div class="text-sm font-extrabold text-amber-900">${esc(ad?.meta || "1200 x 240 recommended")}</div>
+                            <div class="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">${esc(ad?.cta || "Campaign Preview")}</div>
+                        </div>
+                    </div>
+                </section>
+            `;
         }
 
         function normalizeDifficulty(raw, index, total) {
@@ -401,7 +507,30 @@
         }
 
         function renderCourses() {
-            coursesBox.innerHTML = courses.map(c => {
+            const query = courseSearchQuery.trim().toLowerCase();
+            const visibleCourses = query
+                ? courses.filter((course) => {
+                    const name = String(course?.name || "").toLowerCase();
+                    const id = String(course?.id || "").toLowerCase();
+                    const description = String(course?.description || "").toLowerCase();
+                    return name.includes(query) || id.includes(query) || description.includes(query);
+                })
+                : courses;
+
+            if (adminAdSidebar) {
+                adminAdSidebar.innerHTML = renderAdminAdSidebar();
+            }
+
+            if (!visibleCourses.length) {
+                coursesBox.innerHTML = `
+                    <div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs font-semibold text-slate-500">
+                        No courses match your search.
+                    </div>
+                `;
+                return;
+            }
+
+            coursesBox.innerHTML = visibleCourses.map(c => {
                 const x = counts(c);
                 const isSelected = selectedCourse && selectedCourse.id === c.id;
                 const courseId = c?.id === undefined || c?.id === null ? "" : String(c.id);
@@ -430,6 +559,47 @@
             });
             const restartBtn = selectedBox.querySelector("[data-restart]");
             if (restartBtn) restartBtn.onclick = async () => { await restartAssessment(); };
+            selectedBox.querySelectorAll("[data-view]").forEach((btn) => {
+                btn.onclick = () => {
+                    studyView = btn.getAttribute("data-view") === "memory" ? "memory" : "assessment";
+                    flipCardRevealed = false;
+                    renderSelected();
+                };
+            });
+            const prevFlipBtn = selectedBox.querySelector("[data-flip-prev]");
+            if (prevFlipBtn) {
+                prevFlipBtn.onclick = () => {
+                    const cards = flattenFlipCards(selectedCourse);
+                    flipCardIndex -= 1;
+                    clampFlipCardIndex(cards);
+                    flipCardRevealed = false;
+                    renderSelected();
+                };
+            }
+            const nextFlipBtn = selectedBox.querySelector("[data-flip-next]");
+            if (nextFlipBtn) {
+                nextFlipBtn.onclick = () => {
+                    const cards = flattenFlipCards(selectedCourse);
+                    flipCardIndex += 1;
+                    clampFlipCardIndex(cards);
+                    flipCardRevealed = false;
+                    renderSelected();
+                };
+            }
+            const flipCardBtn = selectedBox.querySelector("[data-flip-card]");
+            if (flipCardBtn) {
+                flipCardBtn.onclick = () => {
+                    flipCardRevealed = !flipCardRevealed;
+                    renderSelected();
+                };
+            }
+        }
+
+        if (courseSearchInput) {
+            courseSearchInput.addEventListener("input", (event) => {
+                courseSearchQuery = String(event.target?.value || "");
+                renderCourses();
+            });
         }
 
         function renderSelected() {
@@ -446,6 +616,7 @@
                             <div class="mt-4 text-xs font-semibold text-slate-500">Course creation is available for admin users only.</div>
                         `}
                     </div>
+                    ${renderAdminAdBanner()}
                 `;
                 updateStats();
                 return;
@@ -455,70 +626,122 @@
             const q = adaptive.currentQuestion;
             const completionPct = adaptive.bank.length ? Math.round((totalAnswered() / adaptive.bank.length) * 100) : 0;
             const recent = adaptive.asked.slice(-5).reverse();
+            const flipCards = flattenFlipCards(selectedCourse);
+            clampFlipCardIndex(flipCards);
+            const activeFlipCard = flipCards[flipCardIndex] || null;
 
             selectedBox.innerHTML = `
                 <div class="study-panel rounded-lg border border-cyan-200 p-4 shadow-card md:p-5">
-                    <div class="mb-4 flex flex-wrap items-center gap-2">
-                        <h2 class="bg-gradient-to-r from-cyan-800 to-blue-900 bg-clip-text text-2xl font-extrabold text-transparent">${esc(selectedCourse.name || "(untitled)")}</h2>
-                        <span class="rounded bg-cyan-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-cyan-800">ID ${esc(selectedCourse.id || "n/a")}</span>
+                    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 class="bg-gradient-to-r from-cyan-800 to-blue-900 bg-clip-text text-2xl font-extrabold text-transparent">${esc(selectedCourse.name || "(untitled)")}</h2>
+                            <span class="rounded bg-cyan-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-cyan-800">ID ${esc(selectedCourse.id || "n/a")}</span>
+                        </div>
+                        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                            <button type="button" data-view="assessment" class="rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${studyView === "assessment" ? "border-cyan-600 bg-cyan-600 text-white" : "border-cyan-200 bg-white text-cyan-800"}">Questions</button>
+                            <button type="button" data-view="memory" class="rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${studyView === "memory" ? "border-violet-600 bg-violet-600 text-white" : "border-violet-200 bg-white text-violet-800"}">Flip Cards</button>
+                        </div>
                     </div>
                     <p class="mb-4 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${esc(selectedCourse.description || "")}</p>
+                    ${renderAdminAdBanner()}
 
-                    <div class="mb-4 grid gap-3 md:grid-cols-4">
+                    <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">Chapters<div class="mt-1 text-xl font-extrabold text-slate-950">${x.chapters}</div></div>
                         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">MCQs<div class="mt-1 text-xl font-extrabold text-slate-950">${x.mcq}</div></div>
+                        <div class="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs font-bold text-violet-800">Flip Cards<div class="mt-1 text-xl font-extrabold text-violet-950">${flipCards.length}</div></div>
                         <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">Completion<div class="mt-1 text-xl font-extrabold text-amber-950">${completionPct}%</div></div>
-                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800">Understanding<div class="mt-1 text-xl font-extrabold text-emerald-950">${understandingPct()}%</div></div>
+                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800 sm:col-span-2 xl:col-span-1">Understanding<div class="mt-1 text-xl font-extrabold text-emerald-950">${understandingPct()}%</div></div>
                     </div>
 
-                    <div class="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-3">
-                        <div class="mb-2 flex items-center justify-between">
-                            <span class="text-sm font-extrabold text-blue-950">Assessment Progress</span>
-                            <div class="flex items-center gap-2">
-                                <span class="font-mono text-xs font-semibold text-blue-800">${totalAnswered()} / ${adaptive.bank.length}</span>
-                                <button type="button" data-restart="1" class="rounded border border-amber-600 bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-amber-600">Restart</button>
+                    ${studyView === "assessment" ? `
+                        <div class="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-3">
+                            <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <span class="text-sm font-extrabold text-blue-950">Assessment Progress</span>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="font-mono text-xs font-semibold text-blue-800">${totalAnswered()} / ${adaptive.bank.length}</span>
+                                    <button type="button" data-restart="1" class="rounded border border-amber-600 bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-amber-600">Restart</button>
+                                </div>
                             </div>
+                            <div class="h-3 overflow-hidden rounded bg-white shadow-inner">
+                                <div class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 transition-all" style="width:${completionPct}%"></div>
+                            </div>
+                            <div class="mt-2 text-xs font-medium text-slate-600">Last saved: ${progressRecord?.updatedAt ? esc(progressRecord.updatedAt) : "not saved yet"}</div>
                         </div>
-                        <div class="h-3 overflow-hidden rounded bg-white shadow-inner">
-                            <div class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 transition-all" style="width:${completionPct}%"></div>
-                        </div>
-                        <div class="mt-2 text-xs font-medium text-slate-600">Last saved: ${progressRecord?.updatedAt ? esc(progressRecord.updatedAt) : "not saved yet"}</div>
-                    </div>
 
-                    ${q ? `
-                        <section class="mb-5 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
-                            <div class="mb-3 flex flex-wrap items-center gap-2">
-                                <span class="rounded border px-2 py-0.5 text-xs font-bold ${levelBadge(q.difficulty)}">${q.difficulty.toUpperCase()}</span>
-                                <span class="text-xs font-bold text-blue-700">${esc(q.chapterName)}</span>
-                                <span class="ml-auto rounded bg-white px-2 py-0.5 text-[11px] font-mono font-bold text-cyan-800 shadow-sm">Adaptive: ${currentLevelName()}</span>
+                        <section class="rounded-xl border border-blue-200 bg-gradient-to-b from-blue-50/80 to-white p-4 shadow-card">
+                            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-cyan-700">Assessment Zone</div>
+                                    <h3 class="text-lg font-extrabold text-slate-950">MCQ Challenge Flow</h3>
+                                </div>
+                                <span class="rounded-full border border-cyan-200 bg-white px-3 py-1 text-[11px] font-mono font-bold text-cyan-800 shadow-sm">${adaptive.bank.length} total questions</span>
                             </div>
-                            <h3 class="mb-3 text-lg font-extrabold text-slate-950">${esc(q.question)}</h3>
-                            <div class="grid gap-2">
-                                ${q.options.map((opt, i) => `
-                                    <button type="button" data-answer="${i}" class="answer-option rounded-lg border border-cyan-300 border-l-4 border-l-cyan-500 bg-white p-2.5 text-left text-sm font-bold text-slate-800 hover:border-blue-500 hover:border-l-blue-600 hover:bg-cyan-50">
-                                        ${esc(opt)}
-                                    </button>
-                                `).join("")}
-                            </div>
+
+                            ${q ? `
+                                <section class="mb-5 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+                                    <div class="mb-3 flex flex-wrap items-center gap-2">
+                                        <span class="rounded border px-2 py-0.5 text-xs font-bold ${levelBadge(q.difficulty)}">${q.difficulty.toUpperCase()}</span>
+                                        <span class="text-xs font-bold text-blue-700">${esc(q.chapterName)}</span>
+                                        <span class="ml-auto rounded bg-white px-2 py-0.5 text-[11px] font-mono font-bold text-cyan-800 shadow-sm">Adaptive: ${currentLevelName()}</span>
+                                    </div>
+                                    <h3 class="mb-3 text-lg font-extrabold text-slate-950">${esc(q.question)}</h3>
+                                    <div class="grid gap-2">
+                                        ${q.options.map((opt, i) => `
+                                            <button type="button" data-answer="${i}" class="answer-option rounded-lg border border-cyan-300 border-l-4 border-l-cyan-500 bg-white p-2.5 text-left text-sm font-bold text-slate-800 hover:border-blue-500 hover:border-l-blue-600 hover:bg-cyan-50">
+                                                ${esc(opt)}
+                                            </button>
+                                        `).join("")}
+                                    </div>
+                                </section>
+                            ` : `
+                                <section class="mb-5 rounded-lg border border-emerald-300 bg-emerald-100 p-4 text-sm font-bold text-emerald-900">
+                                    Assessment complete for this course. Final understanding score: ${understandingPct()}%.
+                                </section>
+                            `}
+
+                            <section class="rounded-lg border border-slate-200 bg-white p-3">
+                                <h3 class="mb-2 text-sm font-extrabold text-slate-950">Recent Answers</h3>
+                                ${recent.length ? `
+                                    <div class="space-y-2">
+                                        ${recent.map(r => `
+                                            <div class="rounded border px-2 py-1 text-xs font-bold ${r.correct ? "border-emerald-300 bg-emerald-100 text-emerald-900" : "border-rose-300 bg-rose-100 text-rose-900"}">
+                                                [${r.level}] ${esc(r.question)} | ${r.correct ? "Correct" : "Incorrect"}
+                                            </div>
+                                        `).join("")}
+                                    </div>
+                                ` : `<div class="text-xs font-medium text-slate-600">No answers yet.</div>`}
+                            </section>
                         </section>
                     ` : `
-                        <section class="mb-5 rounded-lg border border-emerald-300 bg-emerald-100 p-4 text-sm font-bold text-emerald-900">
-                            Assessment complete for this course. Final understanding score: ${understandingPct()}%.
+                        <section class="rounded-xl border border-violet-200 bg-gradient-to-b from-violet-50 to-white p-4 shadow-card">
+                            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <div class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-violet-700">Memory Zone</div>
+                                    <h3 class="text-lg font-extrabold text-violet-950">Flip Card Library</h3>
+                                    <p class="mt-1 text-xs font-medium text-slate-600">One card at a time. Use the corner controls to move through the deck.</p>
+                                </div>
+                                <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                                    <button type="button" data-flip-prev="1" class="rounded-full border border-violet-200 bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-violet-800 hover:border-violet-400">Prev</button>
+                                    <button type="button" data-flip-next="1" class="rounded-full border border-violet-600 bg-violet-600 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-white hover:bg-violet-700">Next</button>
+                                </div>
+                            </div>
+                            ${activeFlipCard ? `
+                                <div class="mb-3 flex items-center justify-between gap-2">
+                                    <div class="text-[11px] font-bold uppercase tracking-wide text-violet-700">${esc(activeFlipCard.chapterName)}</div>
+                                    <span class="rounded-full border border-violet-200 bg-white px-3 py-1 text-[11px] font-mono font-bold text-violet-700 shadow-sm">${flipCardIndex + 1} / ${flipCards.length}</span>
+                                </div>
+                                <button type="button" data-flip-card="1" class="block w-full rounded-2xl border border-violet-200 bg-white p-4 text-left shadow-sm transition hover:border-violet-400 hover:shadow-card">
+                                    <div class="mb-3 flex items-center justify-between gap-2">
+                                        <div class="text-[11px] font-extrabold uppercase tracking-[0.16em] ${flipCardRevealed ? "text-slate-700" : "text-violet-800"}">${flipCardRevealed ? "Back" : "Front"}</div>
+                                        <span class="rounded-full border ${flipCardRevealed ? "border-slate-200 text-slate-600" : "border-violet-200 text-violet-700"} bg-white px-3 py-1 text-[11px] font-bold">${flipCardRevealed ? "Click to hide answer" : "Click to reveal answer"}</span>
+                                    </div>
+                                    <div class="rounded-xl ${flipCardRevealed ? "border border-slate-200 bg-slate-50" : "border border-violet-100 bg-violet-50"} p-6 text-center">
+                                        <div class="text-lg ${flipCardRevealed ? "font-medium text-slate-700" : "font-bold text-slate-900"} whitespace-pre-wrap">${esc(flipCardRevealed ? activeFlipCard.back : activeFlipCard.front)}</div>
+                                    </div>
+                                </button>
+                            ` : `<div class="rounded-lg border border-dashed border-violet-300 bg-white/80 p-4 text-xs font-medium text-slate-600">No flip cards available for this course yet.</div>`}
                         </section>
                     `}
-
-                    <section class="rounded-lg border border-slate-200 bg-white p-3">
-                        <h3 class="mb-2 text-sm font-extrabold text-slate-950">Recent Answers</h3>
-                        ${recent.length ? `
-                            <div class="space-y-2">
-                                ${recent.map(r => `
-                                    <div class="rounded border px-2 py-1 text-xs font-bold ${r.correct ? "border-emerald-300 bg-emerald-100 text-emerald-900" : "border-rose-300 bg-rose-100 text-rose-900"}">
-                                        [${r.level}] ${esc(r.question)} | ${r.correct ? "Correct" : "Incorrect"}
-                                    </div>
-                                `).join("")}
-                            </div>
-                        ` : `<div class="text-xs font-medium text-slate-600">No answers yet.</div>`}
-                    </section>
                 </div>
             `;
 
@@ -528,6 +751,12 @@
 
         try {
             statusEl.textContent = "Loading courses...";
+            try {
+                siteSettings = await API.getSettings();
+            } catch (err) {
+                console.error("SETTINGS LOAD ERROR:", err);
+                siteSettings = null;
+            }
             courses = await API.getCourses();
             renderCourses();
             const selectedId = new URLSearchParams(location.search).get("course");
