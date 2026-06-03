@@ -57,6 +57,7 @@ function validateCourse(body) {
     for (const chapter of body.chapters) {
         if (!chapter || typeof chapter !== "object") return "Invalid chapter";
         if (typeof chapter.name !== "string" || !chapter.name.trim()) return "Chapter name is required";
+        if (chapter.reference !== undefined && typeof chapter.reference !== "string") return "Chapter reference must be text";
 
         if (chapter.mcqs !== undefined) {
             if (!Array.isArray(chapter.mcqs)) return "Invalid chapter MCQs";
@@ -81,6 +82,7 @@ function validateCourse(body) {
 function validateChapter(chapter) {
     if (!chapter || typeof chapter !== "object") return "Invalid chapter";
     if (typeof chapter.name !== "string" || !chapter.name.trim()) return "Chapter name is required";
+    if (chapter.reference !== undefined && typeof chapter.reference !== "string") return "Chapter reference must be text";
 
     if (chapter.mcqs !== undefined) {
         if (!Array.isArray(chapter.mcqs)) return "Invalid chapter MCQs";
@@ -105,6 +107,7 @@ function normalizeCourse(body) {
     const chapters = (body.chapters || []).map((ch, idx) => ({
         id: ch.id || `ch-${idx + 1}`,
         name: ch.name.trim(),
+        reference: typeof ch.reference === "string" ? ch.reference.trim() : "",
         mcqs: (ch.mcqs || []).map(m => ({
             question: m.question.trim(),
             options: m.options.map(o => o.trim()),
@@ -183,6 +186,7 @@ function normalizeChapter(chapter, fallbackId) {
     return {
         id: String(chapter.id || fallbackId || "").trim() || `ch-${Date.now()}`,
         name: String(chapter.name || "").trim(),
+        reference: typeof chapter.reference === "string" ? chapter.reference.trim() : "",
         mcqs: Array.isArray(chapter.mcqs)
             ? chapter.mcqs.map(m => ({
                 question: m.question.trim(),

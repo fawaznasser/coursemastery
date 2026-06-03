@@ -273,6 +273,7 @@
             const chapter = {
                 id: crypto.randomUUID(),
                 name: name.trim(),
+                reference: "",
                 mcqs: [],
                 flips: [],
                 ui: { showMcqEditor: false, showFlipEditor: false, mcqDraft: createEmptyMcqDraft(), flipDraft: createEmptyFlipDraft() }
@@ -338,6 +339,7 @@
                         <input data-ch-name="${esc(ch.id)}" class="field rounded border border-slate-200 px-2 py-1 text-sm font-bold text-blue-950" value="${esc(ch.name)}" />
                         <div class="rounded bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">MCQ: ${ch.mcqs.length} | Flip: ${ch.flips.length}</div>
                     </div>
+                    <textarea data-ch-reference="${esc(ch.id)}" class="field mb-2 w-full rounded border border-slate-200 px-2 py-2 text-xs text-slate-700" rows="3" placeholder="Chapter reference notes for students">${esc(ch.reference || "")}</textarea>
                     <div class="chapter-card-actions mb-2 flex flex-wrap gap-2">
                         <button type="button" class="rounded border border-cyan-700 bg-cyan-600 px-2 py-1 text-xs font-bold text-white hover:bg-cyan-700" data-save-ch="${esc(ch.id)}">Save Chapter</button>
                         <button type="button" class="rounded border border-blue-700 bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700" data-toggle-mcq="${esc(ch.id)}">${ch.ui.showMcqEditor ? "Close MCQ" : "Add MCQ"}</button>
@@ -380,12 +382,16 @@
                     ` : ""}
                     <div class="space-y-1 text-xs text-slate-700">
                         ${ch.mcqs.map((m, i) => `
-                            <div class="rounded border border-blue-100 bg-blue-50 px-2 py-1 font-semibold text-blue-950">
-                                MCQ ${i + 1} <span class="ml-1 rounded px-1.5 py-0.5 ${diffClass(m.difficulty || "easy")}">${esc(m.difficulty || "easy")}</span> ${esc(m.question)}
+                            <div class="flex items-start justify-between gap-2 rounded border border-blue-100 bg-blue-50 px-2 py-1 font-semibold text-blue-950">
+                                <div>MCQ ${i + 1} <span class="ml-1 rounded px-1.5 py-0.5 ${diffClass(m.difficulty || "easy")}">${esc(m.difficulty || "easy")}</span> ${esc(m.question)}</div>
+                                <button type="button" class="shrink-0 rounded border border-rose-300 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-700 hover:bg-rose-50" data-del-mcq="${esc(ch.id)}:${i}">Delete</button>
                             </div>
                         `).join("")}
                         ${ch.flips.map((f, i) => `
-                            <div class="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-semibold text-slate-700">Flip ${i + 1}: ${esc(f.front)}</div>
+                            <div class="flex items-start justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 font-semibold text-slate-700">
+                                <div>Flip ${i + 1}: ${esc(f.front)}</div>
+                                <button type="button" class="shrink-0 rounded border border-rose-300 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-700 hover:bg-rose-50" data-del-flip="${esc(ch.id)}:${i}">Delete</button>
+                            </div>
                         `).join("")}
                     </div>
                 </div>
@@ -482,6 +488,30 @@
                 };
             });
 
+            chaptersBox.querySelectorAll("[data-del-mcq]").forEach(btn => {
+                btn.onclick = () => {
+                    const raw = btn.getAttribute("data-del-mcq") || "";
+                    const [chapterId, indexRaw] = raw.split(":");
+                    const ch = chapters.find(x => x.id === chapterId);
+                    const index = Number(indexRaw);
+                    if (!ch || !Number.isInteger(index)) return;
+                    ch.mcqs.splice(index, 1);
+                    renderChapters();
+                };
+            });
+
+            chaptersBox.querySelectorAll("[data-del-flip]").forEach(btn => {
+                btn.onclick = () => {
+                    const raw = btn.getAttribute("data-del-flip") || "";
+                    const [chapterId, indexRaw] = raw.split(":");
+                    const ch = chapters.find(x => x.id === chapterId);
+                    const index = Number(indexRaw);
+                    if (!ch || !Number.isInteger(index)) return;
+                    ch.flips.splice(index, 1);
+                    renderChapters();
+                };
+            });
+
             chaptersBox.querySelectorAll("[data-save-ch]").forEach(btn => {
                 btn.onclick = async () => {
                     const id = btn.getAttribute("data-save-ch");
@@ -489,9 +519,11 @@
                     if (!ch) return;
 
                     const nameInputEl = chaptersBox.querySelector(`[data-ch-name="${id}"]`);
+                    const referenceInputEl = chaptersBox.querySelector(`[data-ch-reference="${id}"]`);
                     const nextName = nameInputEl?.value.trim() || "";
                     if (!nextName) return alert("Chapter name is required.");
                     ch.name = nextName;
+                    ch.reference = referenceInputEl?.value || "";
 
                     if (editingCourseId) {
                         status.textContent = "Saving chapter...";
@@ -499,6 +531,7 @@
                             await API.updateCourseChapter(editingCourseId, id, {
                                 id: ch.id,
                                 name: ch.name,
+                                reference: ch.reference,
                                 mcqs: ch.mcqs,
                                 flips: ch.flips
                             });
@@ -608,6 +641,7 @@
             chapters = source.map(ch => ({
                 id: ch.id || crypto.randomUUID(),
                 name: ch.name || "Untitled Chapter",
+                reference: ch.reference || "",
                 mcqs: Array.isArray(ch.mcqs)
                     ? ch.mcqs.map(m => ({
                         question: m.question || "",

@@ -247,6 +247,17 @@
             });
         }
 
+        function chapterReferences(course) {
+            const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+            return chapters
+                .map((chapter, chapterIndex) => ({
+                    id: chapter?.id || `ch-${chapterIndex + 1}`,
+                    name: chapter?.name || `Chapter ${chapterIndex + 1}`,
+                    reference: typeof chapter?.reference === "string" ? chapter.reference.trim() : ""
+                }))
+                .filter((chapter) => chapter.reference);
+        }
+
         function clampFlipCardIndex(cards) {
             if (!cards.length) {
                 flipCardIndex = 0;
@@ -627,6 +638,7 @@
             const completionPct = adaptive.bank.length ? Math.round((totalAnswered() / adaptive.bank.length) * 100) : 0;
             const recent = adaptive.asked.slice(-5).reverse();
             const flipCards = flattenFlipCards(selectedCourse);
+            const references = chapterReferences(selectedCourse);
             clampFlipCardIndex(flipCards);
             const activeFlipCard = flipCards[flipCardIndex] || null;
 
@@ -652,6 +664,23 @@
                         <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">Completion<div class="mt-1 text-xl font-extrabold text-amber-950">${completionPct}%</div></div>
                         <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800 sm:col-span-2 xl:col-span-1">Understanding<div class="mt-1 text-xl font-extrabold text-emerald-950">${understandingPct()}%</div></div>
                     </div>
+
+                    ${references.length ? `
+                        <section class="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div class="mb-3">
+                                <div class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Reference Notes</div>
+                                <h3 class="text-lg font-extrabold text-slate-950">Chapter Guidance</h3>
+                            </div>
+                            <div class="grid gap-3 md:grid-cols-2">
+                                ${references.map((chapter) => `
+                                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                        <div class="mb-2 text-sm font-extrabold text-slate-950">${esc(chapter.name)}</div>
+                                        <div class="text-sm font-medium leading-relaxed text-slate-700 whitespace-pre-wrap">${esc(chapter.reference)}</div>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        </section>
+                    ` : ""}
 
                     ${studyView === "assessment" ? `
                         <div class="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-3">
