@@ -212,8 +212,146 @@ async function getCourseById(courseId) {
     return result.Item || null;
 }
 
+function courseContentId(courseId, kind, childId) {
+    return `__course_content__#${encodeURIComponent(courseId)}#${kind}#${encodeURIComponent(String(childId))}`;
+}
+
+function courseMetadata(course) {
+    const { chapters, ...metadata } = course;
+    return { ...metadata, type: "course" };
+}
+
+function isLegacyCourse(course) {
+    return Array.isArray(course.chapters);
+}
+
+async function getAllItems() {
+    const items = [];
+    let lastEvaluatedKey;
+    do {
+        const result = await db.send(new ScanCommand({ TableName: TABLE, ExclusiveStartKey: lastEvaluatedKey }));
+        items.push(...(result.Items || []));
+        lastEvaluatedKey = result.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+    return items;
+}
+
+function contentItemsForCourse(items, courseId) {
+    return items.filter(item => item?.type === "course-content" && item.courseId === courseId);
+}
+
+function hydrateCourse(course, items) {
+    const content = contentItemsForCourse(items, course.id);
+    if (!content.length) return { ...course, chapters: Array.isArray(course.chapters) ? course.chapters : [] };
+
+    const chapters = content
+        .filter(item => item.contentType === "chapter")
+        .sort((a, b) => a.order - b.order)
+        .map(chapter => ({
+            id: chapter.chapterId,
+            name: chapter.name,
+            reference: chapter.reference,
+            mcqs: content
+                .filter(item => item.contentType === "mcq" && item.chapterId === chapter.chapterId)
+                .sort((a, b) => a.order - b.order)
+                .map(({ question, options, answerIndex, difficulty }) => ({ question, options, answerIndex, difficulty })),
+            flips: content
+                .filter(item => item.contentType === "flip" && item.chapterId === chapter.chapterId)
+                .sort((a, b) => a.order - b.order)
+                .map(({ front, back }) => ({ front, back }))
+        }));
+    return { ...course, chapters };
+}
+
+function chapterItems(courseId, chapter, chapterOrder) {
+    const items = [{
+        id: courseContentId(courseId, "chapter", chapter.id),
+        type: "course-content",
+        contentType: "chapter",
+        courseId,
+        chapterId: chapter.id,
+        name: chapter.name,
+        reference: chapter.reference,
+        order: chapterOrder
+    }];
+    chapter.mcqs.forEach((mcq, order) => items.push({
+        id: courseContentId(courseId, `mcq-${chapter.id}`, order),
+        type: "course-content",
+        contentType: "mcq",
+        courseId,
+        chapterId: chapter.id,
+        order,
+        ...mcq
+    }));
+    chapter.flips.forEach((flip, order) => items.push({
+        id: courseContentId(courseId, `flip-${chapter.id}`, order),
+        type: "course-content",
+        contentType: "flip",
+        courseId,
+        chapterId: chapter.id,
+        order,
+        ...flip
+    }));
+    return items;
+}
+
+async function replaceCourseContent(courseId, chapters) {
+    const existing = contentItemsForCourse(await getAllItems(), courseId);
+    await Promise.all(existing.map(item => db.send(new DeleteCommand({ TableName: TABLE, Key: { id: item.id } }))));
+    await Promise.all(chapters.flatMap((chapter, order) => chapterItems(courseId, chapter, order))
+        .map(item => db.send(new PutCommand({ TableName: TABLE, Item: item }))));
+}
+
+async function replaceChapterContent(courseId, chapter, chapterOrder) {
+    const existing = contentItemsForCourse(await getAllItems(), courseId)
+        .filter(item => item.chapterId === chapter.id);
+    await Promise.all(existing.map(item => db.send(new DeleteCommand({ TableName: TABLE, Key: { id: item.id } }))));
+    await Promise.all(chapterItems(courseId, chapter, chapterOrder)
+        .map(item => db.send(new PutCommand({ TableName: TABLE, Item: item }))));
+}
+
+async function getHydratedCourses() {
+    const items = await getAllItems();
+    return items
+        .filter(item => item?.id !== SETTINGS_ID && item?.type !== "course-content")
+        .map(course => hydrateCourse(course, items));
+}
+
 function getPathname(eventPath = "") {
     return String(eventPath).split("?")[0];
+}
+
+function payloadTooLargeResponse(event, err) {
+    const pathname = getPathname(event.path);
+    const chapterMatch = pathname.match(/\/courses\/([^/]+)\/chapters(?:\/([^/]+))?$/);
+
+    if (pathname === "/settings") {
+        return {
+            message: "Settings could not be saved because the DynamoDB item is larger than 400 KB.",
+            details: "The configured image or ad content is too large. Use a smaller image or store the image at a URL instead of embedding it.",
+            code: "SETTINGS_ITEM_TOO_LARGE",
+            operation: `${event.httpMethod} ${pathname}`
+        };
+    }
+
+    if (chapterMatch) {
+        const courseId = decodeURIComponent(chapterMatch[1]);
+        const chapterId = chapterMatch[2] ? decodeURIComponent(chapterMatch[2]) : null;
+        return {
+            message: `Chapter${chapterId ? ` "${chapterId}"` : ""} in course "${courseId}" could not be saved because one content item is larger than DynamoDB's 400 KB limit.`,
+            details: "MCQs and flip cards are stored separately. Shorten the oversized question, option, answer, reference, or flip-card text.",
+            code: "CHAPTER_CONTENT_ITEM_TOO_LARGE",
+            operation: `${event.httpMethod} ${pathname}`
+        };
+    }
+
+    return {
+        message: "Course data could not be saved because a DynamoDB item is larger than 400 KB.",
+        details: "Course metadata, chapters, MCQs, and flip cards are stored separately. Check for an unusually large course field or individual content item.",
+        code: "COURSE_ITEM_TOO_LARGE",
+        operation: `${event.httpMethod} ${pathname}`,
+        cause: err?.name || "ValidationException"
+    };
 }
 
 exports.handler = async (event) => {
@@ -238,16 +376,7 @@ exports.handler = async (event) => {
         }
 
         if (event.httpMethod === "GET" && !chapterCollectionMatch && !chapterItemMatch) {
-            const items = [];
-            let lastEvaluatedKey = undefined;
-            do {
-                const result = await db.send(new ScanCommand({
-                    TableName: TABLE,
-                    ExclusiveStartKey: lastEvaluatedKey
-                }));
-                items.push(...(result.Items || []).filter((item) => item?.id !== SETTINGS_ID));
-                lastEvaluatedKey = result.LastEvaluatedKey;
-            } while (lastEvaluatedKey);
+            const items = await getHydratedCourses();
 
             return {
                 statusCode: 200,
@@ -269,7 +398,7 @@ exports.handler = async (event) => {
             return {
                 statusCode: 200,
                 headers: { ...cors(), "Content-Type": "application/json" },
-                body: JSON.stringify(Array.isArray(course.chapters) ? course.chapters : [])
+                body: JSON.stringify(hydrateCourse(course, await getAllItems()).chapters)
             };
         }
 
@@ -284,7 +413,7 @@ exports.handler = async (event) => {
                     body: JSON.stringify({ message: "Course not found" })
                 };
             }
-            const chapter = (Array.isArray(course.chapters) ? course.chapters : []).find(ch => String(ch.id) === chapterId);
+            const chapter = hydrateCourse(course, await getAllItems()).chapters.find(ch => String(ch.id) === chapterId);
             if (!chapter) {
                 return {
                     statusCode: 404,
@@ -333,7 +462,7 @@ exports.handler = async (event) => {
                 };
             }
 
-            const chapters = Array.isArray(course.chapters) ? [...course.chapters] : [];
+            const chapters = hydrateCourse(course, await getAllItems()).chapters;
             const chapter = normalizeChapter(body);
             if (chapters.some(ch => String(ch.id) === chapter.id)) {
                 return {
@@ -344,8 +473,12 @@ exports.handler = async (event) => {
             }
             chapters.push(chapter);
 
-            const nextCourse = { ...course, chapters, updatedAt: new Date().toISOString() };
-            await db.send(new PutCommand({ TableName: TABLE, Item: nextCourse }));
+            if (isLegacyCourse(course)) {
+                await replaceCourseContent(courseId, chapters);
+            } else {
+                await replaceChapterContent(courseId, chapter, chapters.length - 1);
+            }
+            await db.send(new PutCommand({ TableName: TABLE, Item: courseMetadata({ ...course, updatedAt: new Date().toISOString() }) }));
 
             return {
                 statusCode: 200,
@@ -377,7 +510,7 @@ exports.handler = async (event) => {
                 };
             }
 
-            const chapters = Array.isArray(course.chapters) ? [...course.chapters] : [];
+            const chapters = hydrateCourse(course, await getAllItems()).chapters;
             const idx = chapters.findIndex(ch => String(ch.id) === chapterId);
             if (idx < 0) {
                 return {
@@ -389,8 +522,12 @@ exports.handler = async (event) => {
 
             const chapter = normalizeChapter(body, chapterId);
             chapters[idx] = chapter;
-            const nextCourse = { ...course, chapters, updatedAt: new Date().toISOString() };
-            await db.send(new PutCommand({ TableName: TABLE, Item: nextCourse }));
+            if (isLegacyCourse(course)) {
+                await replaceCourseContent(courseId, chapters);
+            } else {
+                await replaceChapterContent(courseId, chapter, idx);
+            }
+            await db.send(new PutCommand({ TableName: TABLE, Item: courseMetadata({ ...course, updatedAt: new Date().toISOString() }) }));
 
             return {
                 statusCode: 200,
@@ -411,7 +548,7 @@ exports.handler = async (event) => {
                 };
             }
 
-            const chapters = Array.isArray(course.chapters) ? course.chapters : [];
+            const chapters = hydrateCourse(course, await getAllItems()).chapters;
             const nextChapters = chapters.filter(ch => String(ch.id) !== chapterId);
             if (nextChapters.length === chapters.length) {
                 return {
@@ -421,8 +558,14 @@ exports.handler = async (event) => {
                 };
             }
 
-            const nextCourse = { ...course, chapters: nextChapters, updatedAt: new Date().toISOString() };
-            await db.send(new PutCommand({ TableName: TABLE, Item: nextCourse }));
+            if (isLegacyCourse(course)) {
+                await replaceCourseContent(courseId, nextChapters);
+            } else {
+                const existing = contentItemsForCourse(await getAllItems(), courseId)
+                    .filter(item => item.chapterId === chapterId);
+                await Promise.all(existing.map(item => db.send(new DeleteCommand({ TableName: TABLE, Key: { id: item.id } }))));
+            }
+            await db.send(new PutCommand({ TableName: TABLE, Item: courseMetadata({ ...course, updatedAt: new Date().toISOString() }) }));
 
             return {
                 statusCode: 200,
@@ -441,10 +584,12 @@ exports.handler = async (event) => {
                 };
             }
 
-            await db.send(new DeleteCommand({
-                TableName: TABLE,
-                Key: { id: String(courseId).trim() }
-            }));
+            const normalizedCourseId = String(courseId).trim();
+            const content = contentItemsForCourse(await getAllItems(), normalizedCourseId);
+            await Promise.all([
+                db.send(new DeleteCommand({ TableName: TABLE, Key: { id: normalizedCourseId } })),
+                ...content.map(item => db.send(new DeleteCommand({ TableName: TABLE, Key: { id: item.id } })))
+            ]);
 
             return {
                 statusCode: 200,
@@ -475,7 +620,8 @@ exports.handler = async (event) => {
         }
 
         const course = normalizeCourse(body);
-        await db.send(new PutCommand({ TableName: TABLE, Item: course }));
+        await replaceCourseContent(course.id, course.chapters);
+        await db.send(new PutCommand({ TableName: TABLE, Item: courseMetadata(course) }));
 
         return {
             statusCode: 200,
@@ -489,18 +635,18 @@ exports.handler = async (event) => {
         const isUnauthorized = err === "Unauthorized";
         const isValidation = err?.name === "ValidationException" || String(err?.message || "").includes("Item size");
         const statusCode = isForbidden ? 403 : isUnauthorized ? 401 : isValidation ? 400 : 500;
-        const message = isForbidden
-            ? "Forbidden"
+        const response = isForbidden
+            ? { message: "Forbidden" }
             : isUnauthorized
-                ? "Unauthorized"
+                ? { message: "Unauthorized" }
                 : isValidation
-                    ? "Payload too large for settings storage. Use a smaller image."
-                    : "Internal server error";
+                    ? payloadTooLargeResponse(event, err)
+                    : { message: "Internal server error" };
 
         return {
             statusCode,
             headers: { ...cors(), "Content-Type": "application/json" },
-            body: JSON.stringify({ message })
+            body: JSON.stringify(response)
         };
     }
 };
