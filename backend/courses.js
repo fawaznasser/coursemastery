@@ -7,8 +7,8 @@ const {
     DynamoDBDocumentClient,
     ScanCommand,
     PutCommand,
-    DeleteCommand,
-    GetCommand
+    GetCommand,
+    BatchWriteCommand
 } = require("@aws-sdk/lib-dynamodb");
 
 const { user, admin } = require("./auth");
@@ -295,19 +295,63 @@ function chapterItems(courseId, chapter, chapterOrder) {
     return items;
 }
 
+const BATCH_WRITE_SIZE = 25;
+const BATCH_WRITE_MAX_RETRIES = 6;
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function batchWrite(requests) {
+    for (let offset = 0; offset < requests.length; offset += BATCH_WRITE_SIZE) {
+        let pending = requests.slice(offset, offset + BATCH_WRITE_SIZE);
+
+        for (let attempt = 0; pending.length && attempt <= BATCH_WRITE_MAX_RETRIES; attempt += 1) {
+            const result = await db.send(new BatchWriteCommand({
+                RequestItems: { [TABLE]: pending }
+            }));
+            pending = result.UnprocessedItems?.[TABLE] || [];
+
+            if (pending.length && attempt < BATCH_WRITE_MAX_RETRIES) {
+                await delay(Math.min(1000, 100 * (2 ** attempt)));
+            }
+        }
+
+        if (pending.length) {
+            throw new Error(`DynamoDB left ${pending.length} batch write item(s) unprocessed`);
+        }
+    }
+}
+
 async function replaceCourseContent(courseId, chapters) {
     const existing = contentItemsForCourse(await getAllItems(), courseId);
-    await Promise.all(existing.map(item => db.send(new DeleteCommand({ TableName: TABLE, Key: { id: item.id } }))));
-    await Promise.all(chapters.flatMap((chapter, order) => chapterItems(courseId, chapter, order))
-        .map(item => db.send(new PutCommand({ TableName: TABLE, Item: item }))));
+    const nextItems = chapters.flatMap((chapter, order) => chapterItems(courseId, chapter, order));
+
+    // Put replacement content first so a failed save does not leave the
+    // course empty after deleting its previous content.
+    await batchWrite(nextItems.map(item => ({ PutRequest: { Item: item } })));
+
+    const nextIds = new Set(nextItems.map(item => item.id));
+    const staleItems = existing
+        .filter(item => !nextIds.has(item.id))
+        .map(item => ({ DeleteRequest: { Key: { id: item.id } } }));
+    await batchWrite(staleItems);
 }
 
 async function replaceChapterContent(courseId, chapter, chapterOrder) {
     const existing = contentItemsForCourse(await getAllItems(), courseId)
         .filter(item => item.chapterId === chapter.id);
-    await Promise.all(existing.map(item => db.send(new DeleteCommand({ TableName: TABLE, Key: { id: item.id } }))));
-    await Promise.all(chapterItems(courseId, chapter, chapterOrder)
-        .map(item => db.send(new PutCommand({ TableName: TABLE, Item: item }))));
+    const nextItems = chapterItems(courseId, chapter, chapterOrder);
+
+    // Put replacement content first so a failed save preserves the old
+    // chapter instead of deleting it and then timing out during the writes.
+    await batchWrite(nextItems.map(item => ({ PutRequest: { Item: item } })));
+
+    const nextIds = new Set(nextItems.map(item => item.id));
+    const staleItems = existing
+        .filter(item => !nextIds.has(item.id))
+        .map(item => ({ DeleteRequest: { Key: { id: item.id } } }));
+    await batchWrite(staleItems);
 }
 
 async function getHydratedCourses() {
@@ -563,7 +607,7 @@ exports.handler = async (event) => {
             } else {
                 const existing = contentItemsForCourse(await getAllItems(), courseId)
                     .filter(item => item.chapterId === chapterId);
-                await Promise.all(existing.map(item => db.send(new DeleteCommand({ TableName: TABLE, Key: { id: item.id } }))));
+                await batchWrite(existing.map(item => ({ DeleteRequest: { Key: { id: item.id } } })));
             }
             await db.send(new PutCommand({ TableName: TABLE, Item: courseMetadata({ ...course, updatedAt: new Date().toISOString() }) }));
 
@@ -586,9 +630,9 @@ exports.handler = async (event) => {
 
             const normalizedCourseId = String(courseId).trim();
             const content = contentItemsForCourse(await getAllItems(), normalizedCourseId);
-            await Promise.all([
-                db.send(new DeleteCommand({ TableName: TABLE, Key: { id: normalizedCourseId } })),
-                ...content.map(item => db.send(new DeleteCommand({ TableName: TABLE, Key: { id: item.id } })))
+            await batchWrite([
+                { DeleteRequest: { Key: { id: normalizedCourseId } } },
+                ...content.map(item => ({ DeleteRequest: { Key: { id: item.id } } }))
             ]);
 
             return {
