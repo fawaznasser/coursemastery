@@ -34,6 +34,7 @@ function validateMcq(mcq) {
     if (!Number.isInteger(mcq.answerIndex)) return "MCQ answerIndex must be an integer";
     if (mcq.answerIndex < 0 || mcq.answerIndex >= mcq.options.length) return "MCQ answerIndex out of range";
     if (typeof mcq.difficulty !== "string") return "MCQ difficulty is required";
+    if (mcq.explanation !== undefined && typeof mcq.explanation !== "string") return "MCQ explanation must be text";
     const d = mcq.difficulty.trim().toLowerCase();
     if (d !== "easy" && d !== "medium" && d !== "hard") return "MCQ difficulty must be easy, medium, or hard";
     return null;
@@ -112,7 +113,8 @@ function normalizeCourse(body) {
             question: m.question.trim(),
             options: m.options.map(o => o.trim()),
             answerIndex: m.answerIndex,
-            difficulty: String(m.difficulty || "easy").trim().toLowerCase()
+            difficulty: String(m.difficulty || "easy").trim().toLowerCase(),
+            explanation: typeof m.explanation === "string" ? m.explanation.trim() : ""
         })),
         flips: (ch.flips || []).map(f => ({
             front: f.front.trim(),
@@ -192,7 +194,8 @@ function normalizeChapter(chapter, fallbackId) {
                 question: m.question.trim(),
                 options: m.options.map(o => o.trim()),
                 answerIndex: m.answerIndex,
-                difficulty: String(m.difficulty || "easy").trim().toLowerCase()
+                difficulty: String(m.difficulty || "easy").trim().toLowerCase(),
+                explanation: typeof m.explanation === "string" ? m.explanation.trim() : ""
             }))
             : [],
         flips: Array.isArray(chapter.flips)
@@ -254,7 +257,13 @@ function hydrateCourse(course, items) {
             mcqs: content
                 .filter(item => item.contentType === "mcq" && item.chapterId === chapter.chapterId)
                 .sort((a, b) => a.order - b.order)
-                .map(({ question, options, answerIndex, difficulty }) => ({ question, options, answerIndex, difficulty })),
+                .map(({ question, options, answerIndex, difficulty, explanation }) => ({
+                    question,
+                    options,
+                    answerIndex,
+                    difficulty,
+                    explanation: typeof explanation === "string" ? explanation : ""
+                })),
             flips: content
                 .filter(item => item.contentType === "flip" && item.chapterId === chapter.chapterId)
                 .sort((a, b) => a.order - b.order)
@@ -361,6 +370,38 @@ async function getHydratedCourses() {
         .map(course => hydrateCourse(course, items));
 }
 
+const GUEST_QUESTION_LIMIT = 100;
+
+function getGuestQuestionSample(courses, limit = GUEST_QUESTION_LIMIT) {
+    const questions = [];
+
+    for (const course of courses) {
+        for (const chapter of course.chapters || []) {
+            (chapter.mcqs || []).forEach((mcq, questionIndex) => {
+                questions.push({
+                    id: `${course.id}:${chapter.id}:${questionIndex}`,
+                    courseId: course.id,
+                    courseName: course.name,
+                    chapterId: chapter.id,
+                    chapterName: chapter.name,
+                    question: mcq.question,
+                    options: [...mcq.options],
+                    answerIndex: mcq.answerIndex,
+                    difficulty: mcq.difficulty,
+                    explanation: mcq.explanation || ""
+                });
+            });
+        }
+    }
+
+    for (let index = questions.length - 1; index > 0; index -= 1) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [questions[index], questions[randomIndex]] = [questions[randomIndex], questions[index]];
+    }
+
+    return questions.slice(0, limit);
+}
+
 function getPathname(eventPath = "") {
     return String(eventPath).split("?")[0];
 }
@@ -404,8 +445,18 @@ exports.handler = async (event) => {
             return { statusCode: 200, headers: cors(), body: "" };
         }
 
-        const u = user(event);
         const pathname = getPathname(event.path);
+
+        if (event.httpMethod === "GET" && pathname === "/guest/questions") {
+            const questions = getGuestQuestionSample(await getHydratedCourses());
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Cache-Control": "no-store", "Content-Type": "application/json" },
+                body: JSON.stringify({ questions, count: questions.length, limit: GUEST_QUESTION_LIMIT })
+            };
+        }
+
+        const u = user(event);
         const settingsMatch = pathname === "/settings";
         const chapterCollectionMatch = pathname.match(/\/courses\/([^/]+)\/chapters$/);
         const chapterItemMatch = pathname.match(/\/courses\/([^/]+)\/chapters\/([^/]+)$/);

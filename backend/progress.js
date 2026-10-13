@@ -23,12 +23,44 @@ function cors() {
 }
 
 function validateProgress(body) {
-    if (typeof body.completed !== "boolean") return "Invalid completed";
-    if (typeof body.progressPct !== "number") return "Invalid progressPct";
-    if (body.progressPct < 0 || body.progressPct > 100) {
-        return "progressPct must be 0-100";
+    const hasProgress = body.completed !== undefined || body.progressPct !== undefined;
+    const hasActiveChapter = body.activeChapterId !== undefined;
+
+    if (!hasProgress && !hasActiveChapter) return "No progress update provided";
+    if (hasProgress) {
+        if (typeof body.completed !== "boolean") return "Invalid completed";
+        if (typeof body.progressPct !== "number") return "Invalid progressPct";
+        if (body.progressPct < 0 || body.progressPct > 100) return "progressPct must be 0-100";
+    }
+    if (body.chapterId !== undefined && body.chapterId !== null && typeof body.chapterId !== "string") {
+        return "Invalid chapterId";
+    }
+    if (body.activeChapterId !== undefined && body.activeChapterId !== null && typeof body.activeChapterId !== "string") {
+        return "Invalid activeChapterId";
+    }
+    if (body.understandingPct !== undefined) {
+        if (typeof body.understandingPct !== "number" || body.understandingPct < 0 || body.understandingPct > 100) {
+            return "understandingPct must be 0-100";
+        }
+    }
+    for (const field of ["answeredCount", "totalQuestions"]) {
+        if (body[field] !== undefined && (!Number.isInteger(body[field]) || body[field] < 0)) {
+            return `${field} must be a non-negative integer`;
+        }
     }
     return null;
+}
+
+function progressDetails(body, updatedAt) {
+    const details = {
+        completed: body.completed,
+        progressPct: body.progressPct,
+        updatedAt
+    };
+    if (body.understandingPct !== undefined) details.understandingPct = body.understandingPct;
+    if (body.answeredCount !== undefined) details.answeredCount = body.answeredCount;
+    if (body.totalQuestions !== undefined) details.totalQuestions = body.totalQuestions;
+    return details;
 }
 
 exports.handler = async (event) => {
@@ -71,13 +103,36 @@ exports.handler = async (event) => {
             };
         }
 
+        const currentResult = await db.send(new GetCommand({
+            TableName: TABLE,
+            Key: { userId: u.sub, courseId }
+        }));
+        const updatedAt = new Date().toISOString();
         const progress = {
+            ...(currentResult.Item || {}),
             userId: u.sub,
             courseId,
-            completed: body.completed,
-            progressPct: body.progressPct,
-            updatedAt: new Date().toISOString()
+            updatedAt
         };
+
+        if (body.activeChapterId !== undefined) {
+            progress.activeChapterId = body.activeChapterId && body.activeChapterId.trim()
+                ? body.activeChapterId.trim()
+                : null;
+        }
+
+        if (body.completed !== undefined) {
+            const details = progressDetails(body, updatedAt);
+            const chapterId = typeof body.chapterId === "string" ? body.chapterId.trim() : "";
+            if (chapterId) {
+                progress.chapterProgress = {
+                    ...(progress.chapterProgress || {}),
+                    [chapterId]: details
+                };
+            } else {
+                Object.assign(progress, details);
+            }
+        }
 
         await db.send(new PutCommand({ TableName: TABLE, Item: progress }));
 

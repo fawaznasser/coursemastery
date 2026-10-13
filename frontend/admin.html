@@ -63,6 +63,27 @@
             box-shadow: 0 10px 24px rgba(2, 132, 199, 0.13);
         }
 
+        .loading-bar {
+            width: 38%;
+            animation: loading-slide 1.1s ease-in-out infinite;
+        }
+
+        @keyframes loading-slide {
+            0% {
+                transform: translateX(-120%);
+            }
+
+            100% {
+                transform: translateX(360%);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .loading-bar {
+                animation-duration: 2.4s;
+            }
+        }
+
         @media (max-width: 640px) {
             body {
                 background-attachment: scroll;
@@ -138,7 +159,15 @@
             </section>
 
             <section class="admin-panel rounded-lg border border-cyan-200 p-4 shadow-card md:p-5">
-                <div id="status" class="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-900">Ready</div>
+                <div id="activityPanel" class="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-900" aria-live="polite" aria-busy="false">
+                    <div class="flex items-center justify-between gap-3">
+                        <span id="status">Ready</span>
+                        <span id="loadingLabel" class="hidden text-[10px] font-extrabold uppercase tracking-[0.16em] text-cyan-700">Working</span>
+                    </div>
+                    <div id="loadingProgress" class="mt-2 hidden h-1.5 overflow-hidden rounded-full bg-cyan-100" role="progressbar" aria-label="Operation in progress">
+                        <div class="loading-bar h-full rounded-full bg-gradient-to-r from-cyan-500 via-blue-600 to-cyan-500 shadow-sm"></div>
+                    </div>
+                </div>
                 <section class="mb-4 rounded-lg border border-amber-200 bg-amber-50/70 p-4">
                     <div class="mb-3">
                         <h2 class="text-lg font-extrabold text-amber-950">Ad Placements</h2>
@@ -210,6 +239,9 @@
         }
 
         const status = document.getElementById("status");
+        const activityPanel = document.getElementById("activityPanel");
+        const loadingProgress = document.getElementById("loadingProgress");
+        const loadingLabel = document.getElementById("loadingLabel");
         const adminBox = document.getElementById("admin");
         const chaptersBox = document.getElementById("chapters");
         const form = document.getElementById("courseForm");
@@ -244,13 +276,26 @@
         let heroImageUrl = "";
         let sidebarImageUrl = "";
         const MAX_SETTINGS_IMAGE_BYTES = 220 * 1024;
+        function syncLoadingState() {
+            const isLoading = status.textContent.trim().endsWith("...");
+            loadingProgress.classList.toggle("hidden", !isLoading);
+            loadingLabel.classList.toggle("hidden", !isLoading);
+            activityPanel.setAttribute("aria-busy", String(isLoading));
+        }
+        new MutationObserver(syncLoadingState).observe(status, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+        syncLoadingState();
         document.getElementById("backBtn").onclick = () => location.href = "/index.html";
         function createEmptyMcqDraft() {
             return {
                 question: "",
                 options: ["", "", "", ""],
                 answerIndex: 0,
-                difficulty: "easy"
+                difficulty: "easy",
+                explanation: ""
             };
         }
         function createEmptyFlipDraft() {
@@ -276,7 +321,7 @@
                 reference: "",
                 mcqs: [],
                 flips: [],
-                ui: { showMcqEditor: false, showFlipEditor: false, mcqDraft: createEmptyMcqDraft(), flipDraft: createEmptyFlipDraft() }
+                ui: { showMcqEditor: false, showFlipEditor: false, editingMcqIndex: null, mcqDraft: createEmptyMcqDraft(), flipDraft: createEmptyFlipDraft() }
             };
 
             if (editingCourseId) {
@@ -329,6 +374,7 @@
             }
             if (!ch.ui.mcqDraft) ch.ui.mcqDraft = createEmptyMcqDraft();
             if (!ch.ui.flipDraft) ch.ui.flipDraft = createEmptyFlipDraft();
+            if (!Number.isInteger(ch.ui.editingMcqIndex)) ch.ui.editingMcqIndex = null;
         }
 
         function renderChapters() {
@@ -348,7 +394,7 @@
                     </div>
                     ${ch.ui.showMcqEditor ? `
                         <div class="mb-2 rounded-lg border border-blue-100 bg-blue-50 p-3">
-                            <div class="mb-2 text-xs font-extrabold text-blue-900">New MCQ</div>
+                            <div class="mb-2 text-xs font-extrabold text-blue-900">${ch.ui.editingMcqIndex === null ? "New MCQ" : `Edit MCQ ${ch.ui.editingMcqIndex + 1}`}</div>
                             <div class="space-y-2">
                                 <input data-mcq-question="${esc(ch.id)}" class="field w-full rounded border border-slate-200 px-2 py-1.5 text-xs" placeholder="Question" value="${esc(ch.ui.mcqDraft.question)}" />
                                 <div class="grid gap-2 sm:grid-cols-2">
@@ -366,7 +412,11 @@
                                         <option value="hard" ${ch.ui.mcqDraft.difficulty === "hard" ? "selected" : ""}>Hard</option>
                                     </select>
                                 </div>
-                                <button type="button" data-save-mcq="${esc(ch.id)}" class="rounded border border-blue-700 bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700">Save MCQ</button>
+                                <textarea data-mcq-explanation="${esc(ch.id)}" class="field w-full rounded border border-slate-200 px-2 py-2 text-xs" rows="3" placeholder="Explain why the correct answer is correct">${esc(ch.ui.mcqDraft.explanation || "")}</textarea>
+                                <div class="flex flex-wrap gap-2">
+                                    <button type="button" data-save-mcq="${esc(ch.id)}" class="rounded border border-blue-700 bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700">${ch.ui.editingMcqIndex === null ? "Save MCQ" : "Update MCQ"}</button>
+                                    ${ch.ui.editingMcqIndex === null ? "" : `<button type="button" data-cancel-edit-mcq="${esc(ch.id)}" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50">Cancel Edit</button>`}
+                                </div>
                             </div>
                         </div>
                     ` : ""}
@@ -383,8 +433,14 @@
                     <div class="space-y-1 text-xs text-slate-700">
                         ${ch.mcqs.map((m, i) => `
                             <div class="flex items-start justify-between gap-2 rounded border border-blue-100 bg-blue-50 px-2 py-1 font-semibold text-blue-950">
-                                <div>MCQ ${i + 1} <span class="ml-1 rounded px-1.5 py-0.5 ${diffClass(m.difficulty || "easy")}">${esc(m.difficulty || "easy")}</span> ${esc(m.question)}</div>
-                                <button type="button" class="shrink-0 rounded border border-rose-300 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-700 hover:bg-rose-50" data-del-mcq="${esc(ch.id)}:${i}">Delete</button>
+                                <div class="min-w-0">
+                                    <div>MCQ ${i + 1} <span class="ml-1 rounded px-1.5 py-0.5 ${diffClass(m.difficulty || "easy")}">${esc(m.difficulty || "easy")}</span> ${esc(m.question)}</div>
+                                    ${m.explanation ? `<div class="mt-1 text-[11px] font-medium text-slate-600">Explanation: ${esc(m.explanation)}</div>` : ""}
+                                </div>
+                                <div class="flex shrink-0 gap-1">
+                                    <button type="button" class="rounded border border-blue-300 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-blue-700 hover:bg-blue-50" data-edit-mcq="${esc(ch.id)}:${i}">Edit</button>
+                                    <button type="button" class="rounded border border-rose-300 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-700 hover:bg-rose-50" data-del-mcq="${esc(ch.id)}:${i}">Delete</button>
+                                </div>
                             </div>
                         `).join("")}
                         ${ch.flips.map((f, i) => `
@@ -422,29 +478,104 @@
             });
 
             chaptersBox.querySelectorAll("[data-save-mcq]").forEach(btn => {
-                btn.onclick = () => {
+                btn.onclick = async () => {
                     const id = btn.getAttribute("data-save-mcq");
                     const ch = chapters.find(x => x.id === id);
                     if (!ch) return;
                     const questionInput = chaptersBox.querySelector(`[data-mcq-question="${id}"]`);
                     const answerSelect = chaptersBox.querySelector(`[data-mcq-answer="${id}"]`);
                     const difficultySelect = chaptersBox.querySelector(`[data-mcq-difficulty="${id}"]`);
+                    const explanationInput = chaptersBox.querySelector(`[data-mcq-explanation="${id}"]`);
                     const optionsRaw = [0, 1, 2, 3]
                         .map(i => chaptersBox.querySelector(`[data-mcq-option="${id}:${i}"]`)?.value.trim() || "");
-                    const nonEmptyCount = optionsRaw.filter(Boolean).length;
+                    const optionEntries = optionsRaw
+                        .map((value, originalIndex) => ({ value, originalIndex }))
+                        .filter(entry => entry.value);
 
                     const question = questionInput?.value.trim() || "";
                     if (!question) return alert("Question is required.");
-                    if (nonEmptyCount < 2) return alert("At least 2 options are required.");
+                    if (optionEntries.length < 2) return alert("At least 2 options are required.");
 
                     const idx = Number(answerSelect?.value ?? "0");
                     if (!Number.isInteger(idx) || idx < 0 || idx >= 4) return alert("Invalid correct answer.");
                     if (!optionsRaw[idx]) return alert("Correct answer option cannot be empty.");
-                    const options = optionsRaw.slice();
+                    const options = optionEntries.map(entry => entry.value);
+                    const answerIndex = optionEntries.findIndex(entry => entry.originalIndex === idx);
 
                     const difficulty = String(difficultySelect?.value || "easy");
-                    ch.mcqs.push({ question, options, answerIndex: idx, difficulty });
+                    const explanation = explanationInput?.value.trim() || "";
+                    const mcq = { question, options, answerIndex, difficulty, explanation };
+                    const wasEditing = Boolean(ch.ui.editingMcqIndex !== null && ch.mcqs[ch.ui.editingMcqIndex]);
+                    if (wasEditing) {
+                        ch.mcqs[ch.ui.editingMcqIndex] = mcq;
+                    } else {
+                        ch.mcqs.push(mcq);
+                    }
+                    const chapterNameInput = chaptersBox.querySelector(`[data-ch-name="${id}"]`);
+                    const chapterReferenceInput = chaptersBox.querySelector(`[data-ch-reference="${id}"]`);
+                    if (chapterNameInput?.value.trim()) ch.name = chapterNameInput.value.trim();
+                    if (chapterReferenceInput) ch.reference = chapterReferenceInput.value;
                     ch.ui.mcqDraft = createEmptyMcqDraft();
+                    ch.ui.editingMcqIndex = null;
+                    ch.ui.showMcqEditor = false;
+                    renderChapters();
+
+                    if (editingCourseId) {
+                        status.textContent = wasEditing ? "Updating question..." : "Saving question...";
+                        try {
+                            await API.updateCourseChapter(editingCourseId, id, {
+                                id: ch.id,
+                                name: ch.name,
+                                reference: ch.reference,
+                                mcqs: ch.mcqs,
+                                flips: ch.flips
+                            });
+                            await refreshEditingCourse(editingCourseId);
+                            status.textContent = wasEditing ? "Question updated." : "Question saved.";
+                        } catch (err) {
+                            console.error("SAVE MCQ ERROR:", err);
+                            status.textContent = wasEditing ? "Failed to update question." : "Failed to save question.";
+                            adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
+                        }
+                    }
+                };
+            });
+
+            chaptersBox.querySelectorAll("[data-edit-mcq]").forEach(btn => {
+                btn.onclick = () => {
+                    const raw = btn.getAttribute("data-edit-mcq") || "";
+                    const separator = raw.lastIndexOf(":");
+                    const chapterId = raw.slice(0, separator);
+                    const index = Number(raw.slice(separator + 1));
+                    const ch = chapters.find(x => x.id === chapterId);
+                    const mcq = ch?.mcqs?.[index];
+                    if (!ch || !mcq || separator < 0 || !Number.isInteger(index)) return;
+                    ensureChapterUi(ch);
+                    const options = Array.isArray(mcq.options) ? mcq.options.slice(0, 4) : [];
+                    while (options.length < 4) options.push("");
+                    ch.ui.mcqDraft = {
+                        question: mcq.question || "",
+                        options,
+                        answerIndex: Number.isInteger(mcq.answerIndex) ? mcq.answerIndex : 0,
+                        difficulty: ["easy", "medium", "hard"].includes(String(mcq.difficulty || "").toLowerCase())
+                            ? String(mcq.difficulty).toLowerCase()
+                            : "easy",
+                        explanation: mcq.explanation || ""
+                    };
+                    ch.ui.editingMcqIndex = index;
+                    ch.ui.showMcqEditor = true;
+                    ch.ui.showFlipEditor = false;
+                    renderChapters();
+                };
+            });
+
+            chaptersBox.querySelectorAll("[data-cancel-edit-mcq]").forEach(btn => {
+                btn.onclick = () => {
+                    const id = btn.getAttribute("data-cancel-edit-mcq");
+                    const ch = chapters.find(x => x.id === id);
+                    if (!ch) return;
+                    ch.ui.mcqDraft = createEmptyMcqDraft();
+                    ch.ui.editingMcqIndex = null;
                     ch.ui.showMcqEditor = false;
                     renderChapters();
                 };
@@ -496,6 +627,13 @@
                     const index = Number(indexRaw);
                     if (!ch || !Number.isInteger(index)) return;
                     ch.mcqs.splice(index, 1);
+                    if (ch.ui.editingMcqIndex === index) {
+                        ch.ui.editingMcqIndex = null;
+                        ch.ui.mcqDraft = createEmptyMcqDraft();
+                        ch.ui.showMcqEditor = false;
+                    } else if (ch.ui.editingMcqIndex > index) {
+                        ch.ui.editingMcqIndex -= 1;
+                    }
                     renderChapters();
                 };
             });
@@ -647,11 +785,12 @@
                         question: m.question || "",
                         options: Array.isArray(m.options) ? m.options : [],
                         answerIndex: Number.isInteger(m.answerIndex) ? m.answerIndex : 0,
-                        difficulty: ["easy", "medium", "hard"].includes(String(m.difficulty || "").toLowerCase()) ? String(m.difficulty).toLowerCase() : "easy"
+                        difficulty: ["easy", "medium", "hard"].includes(String(m.difficulty || "").toLowerCase()) ? String(m.difficulty).toLowerCase() : "easy",
+                        explanation: typeof m.explanation === "string" ? m.explanation : ""
                     }))
                     : [],
                 flips: Array.isArray(ch.flips) ? ch.flips : [],
-                ui: { showMcqEditor: false, showFlipEditor: false, mcqDraft: createEmptyMcqDraft(), flipDraft: createEmptyFlipDraft() }
+                ui: { showMcqEditor: false, showFlipEditor: false, editingMcqIndex: null, mcqDraft: createEmptyMcqDraft(), flipDraft: createEmptyFlipDraft() }
             }));
             renderChapters();
             cancelEditBtn.classList.remove("hidden");
@@ -731,6 +870,7 @@
         heroImageFile.addEventListener("change", async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
+            status.textContent = "Preparing hero image...";
             try {
                 heroImageUrl = await fileToDataUrl(file, 1200, 0.82);
                 heroImagePreview.src = heroImageUrl;
@@ -749,6 +889,7 @@
         sidebarImageFile.addEventListener("change", async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
+            status.textContent = "Preparing sidebar image...";
             try {
                 sidebarImageUrl = await fileToDataUrl(file, 480, 0.8);
                 sidebarImagePreview.src = sidebarImageUrl;
@@ -843,6 +984,7 @@
         resetForm();
         try {
             try {
+                status.textContent = "Loading settings...";
                 siteSettings = await API.getSettings();
                 fillAdsForm(siteSettings);
             } catch (err) {

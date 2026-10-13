@@ -1,7 +1,17 @@
-const API_BASE =
-    window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
-        ? "http://127.0.0.1:3001"
-        : "https://b3v2z6iqdf.execute-api.eu-central-1.amazonaws.com/Prod";
+const hostname = window.location.hostname;
+const isLocalHost =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0" ||
+    hostname === "::1" ||
+    hostname.endsWith(".local") ||
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+
+const API_BASE = isLocalHost
+    ? `${window.location.protocol}//${hostname}:3001`
+    : "https://b3v2z6iqdf.execute-api.eu-central-1.amazonaws.com/Prod";
 
 
 async function request(path, method = "GET", body) {
@@ -21,7 +31,14 @@ async function request(path, method = "GET", body) {
     return res.json();
 }
 
+async function publicRequest(path) {
+    const res = await fetch(API_BASE + path);
+    if (!res.ok) throw await res.text();
+    return res.json();
+}
+
 export const API = {
+    getGuestQuestions: () => publicRequest("/guest/questions"),
     getCourses: () => request("/courses"),
     getSettings: () => request("/settings"),
     saveSettings: (settings) => request("/settings", "PUT", settings),

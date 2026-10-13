@@ -61,6 +61,13 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref CoursesTable
       Events:
+        ApiGuestQuestions:
+          Type: Api
+          Properties:
+            Path: /guest/questions
+            Method: GET
+            Auth:
+              Authorizer: NONE
         Api:
           Type: Api
           Properties:

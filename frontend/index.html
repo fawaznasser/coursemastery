@@ -2,6 +2,7 @@
 <html lang="en">
 
 <head>
+    <meta charset="UTF-8" />
     <title>CourseMastery Dashboard</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
@@ -80,6 +81,28 @@
             transform: translateY(-1px);
             box-shadow: 0 10px 24px rgba(2, 132, 199, 0.14);
         }
+
+        .loading-bar {
+            width: 38%;
+            animation: loading-slide 1.1s ease-in-out infinite;
+        }
+
+        @keyframes loading-slide {
+            0% {
+                transform: translateX(-120%);
+            }
+
+            100% {
+                transform: translateX(360%);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .loading-bar {
+                animation-duration: 2.4s;
+            }
+        }
+
         @media (max-width: 640px) {
             body {
                 background-attachment: scroll;
@@ -107,7 +130,21 @@
 </head>
 
 <body class="min-h-screen font-sans text-ink">
-    <div class="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-8">
+    <section id="welcomeScreen" class="hidden min-h-screen items-center justify-center px-4 py-10">
+        <div class="w-full max-w-xl rounded-2xl border border-cyan-200 bg-white/95 p-7 text-center shadow-soft md:p-10">
+            <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 text-2xl font-extrabold text-white shadow-card">CM</div>
+            <p class="text-xs font-extrabold uppercase tracking-[0.2em] text-cyan-700">CourseMastery</p>
+            <h1 class="mt-2 text-3xl font-extrabold tracking-tight text-slate-950">Learn with an adaptive challenge</h1>
+            <p class="mx-auto mt-3 max-w-md text-sm font-medium leading-relaxed text-slate-600">Sign in for your courses and saved progress, or try the website with a random 100-question guest challenge.</p>
+            <div class="mt-7 grid gap-3 sm:grid-cols-2">
+                <button id="signInBtn" type="button" class="rounded-xl border border-blue-700 bg-blue-600 px-5 py-3 text-sm font-extrabold text-white shadow-card hover:bg-blue-700">Sign In</button>
+                <button id="guestBtn" type="button" class="rounded-xl border border-cyan-300 bg-cyan-50 px-5 py-3 text-sm font-extrabold text-cyan-900 shadow-card hover:bg-cyan-100">Try as Guest</button>
+            </div>
+            <p class="mt-4 text-xs font-semibold text-slate-500">Guest answers are not saved and no account is required.</p>
+        </div>
+    </section>
+
+    <div id="appShell" class="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-8">
         <header class="mb-5 rounded-lg border border-cyan-200/80 glass p-4 shadow-soft">
             <div class="flex flex-wrap items-center gap-3">
                 <div class="mr-auto">
@@ -139,7 +176,15 @@
             </div>
         </div>
 
-        <div id="status" class="mb-4 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-900 shadow-card">Ready</div>
+        <div id="activityPanel" class="mb-4 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-900 shadow-card" aria-live="polite" aria-busy="false">
+            <div class="flex items-center justify-between gap-3">
+                <span id="status">Ready</span>
+                <span id="loadingLabel" class="hidden text-[10px] font-extrabold uppercase tracking-[0.16em] text-cyan-700">Working</span>
+            </div>
+            <div id="loadingProgress" class="mt-2 hidden h-1.5 overflow-hidden rounded-full bg-cyan-100" role="progressbar" aria-label="Operation in progress">
+                <div class="loading-bar h-full rounded-full bg-gradient-to-r from-cyan-500 via-blue-600 to-cyan-500 shadow-sm"></div>
+            </div>
+        </div>
 
         <div class="grid gap-5 lg:grid-cols-[350px_minmax(0,1fr)]">
             <aside class="rounded-lg border border-blue-100 bg-white p-3 shadow-card lg:sticky lg:top-5 lg:h-fit">
@@ -166,7 +211,7 @@
             logout,
             isAdmin
         } from "./auth.js?v=AUTH19";
-        import { API } from "./api.js?v=AUTH19";
+        import { API } from "./api.js?v=GUEST20";
 
         const LEVELS = ["easy", "medium", "hard"];
         const LEVEL_WEIGHT = { easy: 1, medium: 2, hard: 3 };
@@ -175,18 +220,26 @@
         const ELO_K_STUDENT = 24;
         const ELO_K_QUESTION = 8;
 
+        const guestMode = new URLSearchParams(location.search).get("guest") === "1";
         await parseAuth();
         const user = getUser();
-        if (!user) {
-            await login();
-            throw new Error("Redirecting to login");
-        }
-
-        const canManageCourses = isAdmin();
+        if (!user && !guestMode) {
+            document.getElementById("appShell").classList.add("hidden");
+            document.getElementById("welcomeScreen").classList.remove("hidden");
+            document.getElementById("welcomeScreen").classList.add("flex");
+            document.getElementById("signInBtn").onclick = login;
+            document.getElementById("guestBtn").onclick = () => { location.href = "/index.html?guest=1"; };
+        } else {
+        const canManageCourses = !guestMode && isAdmin();
         if (canManageCourses) document.getElementById("adminBtn").classList.remove("hidden");
-        document.getElementById("logout").onclick = logout;
+        const logoutButton = document.getElementById("logout");
+        logoutButton.textContent = guestMode ? "Exit Guest" : "Logout";
+        logoutButton.onclick = guestMode ? () => { location.href = "/index.html"; } : logout;
 
         const statusEl = document.getElementById("status");
+        const activityPanel = document.getElementById("activityPanel");
+        const loadingProgress = document.getElementById("loadingProgress");
+        const loadingLabel = document.getElementById("loadingLabel");
         const selectedBox = document.getElementById("selectedCourse");
         const coursesBox = document.getElementById("courses");
         const courseSearchInput = document.getElementById("courseSearch");
@@ -199,10 +252,24 @@
         let courses = [];
         let courseSearchQuery = "";
         let selectedCourse = null;
+        let selectedChapterId = null;
         let progressRecord = null;
         let studyView = "assessment";
         let flipCardIndex = 0;
         let flipCardRevealed = false;
+        let answerFeedback = null;
+        function syncLoadingState() {
+            const isLoading = statusEl.textContent.trim().endsWith("...");
+            loadingProgress.classList.toggle("hidden", !isLoading);
+            loadingLabel.classList.toggle("hidden", !isLoading);
+            activityPanel.setAttribute("aria-busy", String(isLoading));
+        }
+        new MutationObserver(syncLoadingState).observe(statusEl, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+        syncLoadingState();
         let siteSettings = null;
         let adaptive = {
             bank: [],
@@ -233,13 +300,79 @@
             return { chapters: chapters.length, mcq, flip };
         }
 
-        function flattenFlipCards(course) {
+        function guestCourseFromQuestions(payload) {
+            const groups = new Map();
+            const questions = Array.isArray(payload?.questions) ? payload.questions : [];
+
+            questions.forEach((question, index) => {
+                const sourceCourseId = String(question?.courseId || "course");
+                const sourceChapterId = String(question?.chapterId || "chapter");
+                const groupId = `${sourceCourseId}::${sourceChapterId}`;
+                if (!groups.has(groupId)) {
+                    groups.set(groupId, {
+                        id: groupId,
+                        name: `${question?.courseName || "Course"} — ${question?.chapterName || "Chapter"}`,
+                        reference: "",
+                        flips: [],
+                        mcqs: []
+                    });
+                }
+                groups.get(groupId).mcqs.push({
+                    question: question?.question || `Question ${index + 1}`,
+                    options: Array.isArray(question?.options) ? question.options : [],
+                    answerIndex: Number.isInteger(question?.answerIndex) ? question.answerIndex : -1,
+                    difficulty: question?.difficulty,
+                    explanation: question?.explanation || ""
+                });
+            });
+
+            return {
+                id: "guest-demo",
+                name: "Guest 100-Question Challenge",
+                description: `A random sample of ${questions.length} questions. Your progress is kept only for this visit.`,
+                chapters: Array.from(groups.values())
+            };
+        }
+
+        function chapterId(chapter, chapterIndex) {
+            return String(chapter?.id || `ch-${chapterIndex + 1}`);
+        }
+
+        function normalizeSelectedChapter(course, requestedId) {
+            if (!requestedId) return null;
+            const requested = String(requestedId);
             const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+            return chapters.some((chapter, index) => chapterId(chapter, index) === requested)
+                ? requested
+                : null;
+        }
+
+        function scopedChapters(course) {
+            const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+            if (!selectedChapterId) return chapters;
+            return chapters.filter((chapter, index) => chapterId(chapter, index) === selectedChapterId);
+        }
+
+        function selectedChapterName(course) {
+            if (!selectedChapterId) return "All Chapters";
+            const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+            const index = chapters.findIndex((chapter, chapterIndex) => chapterId(chapter, chapterIndex) === selectedChapterId);
+            return index >= 0 ? (chapters[index]?.name || `Chapter ${index + 1}`) : "All Chapters";
+        }
+
+        function selectedProgress() {
+            if (!progressRecord) return null;
+            if (!selectedChapterId) return progressRecord;
+            return progressRecord.chapterProgress?.[selectedChapterId] || null;
+        }
+
+        function flattenFlipCards(course) {
+            const chapters = scopedChapters(course);
             return chapters.flatMap((chapter, chapterIndex) => {
                 const chapterName = chapter?.name || `Chapter ${chapterIndex + 1}`;
                 const flips = Array.isArray(chapter?.flips) ? chapter.flips : [];
                 return flips.map((flip, flipIndex) => ({
-                    id: `${chapter?.id || `ch-${chapterIndex + 1}`}-flip-${flipIndex}`,
+                    id: `${chapterId(chapter, chapterIndex)}-flip-${flipIndex}`,
                     chapterName,
                     front: flip?.front || "",
                     back: flip?.back || ""
@@ -248,10 +381,10 @@
         }
 
         function chapterReferences(course) {
-            const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+            const chapters = scopedChapters(course);
             return chapters
                 .map((chapter, chapterIndex) => ({
-                    id: chapter?.id || `ch-${chapterIndex + 1}`,
+                    id: chapterId(chapter, chapterIndex),
                     name: chapter?.name || `Chapter ${chapterIndex + 1}`,
                     reference: typeof chapter?.reference === "string" ? chapter.reference.trim() : ""
                 }))
@@ -327,7 +460,7 @@
         }
 
         function buildQuestionBank(course) {
-            const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+            const chapters = scopedChapters(course);
             const all = [];
             chapters.forEach((ch, chIdx) => {
                 const mcqs = Array.isArray(ch.mcqs) ? ch.mcqs : [];
@@ -344,7 +477,8 @@
                         question: m.question || `Question ${qIdx + 1}`,
                         options: Array.isArray(m.options) ? m.options : [],
                         answerIndex: Number.isInteger(m.answerIndex) ? m.answerIndex : -1,
-                        difficulty: normalizeDifficulty(m.difficulty, all.length, 0)
+                        difficulty: normalizeDifficulty(m.difficulty, all.length, 0),
+                        explanation: typeof m.explanation === "string" ? m.explanation.trim() : ""
                     });
                 });
             });
@@ -357,6 +491,7 @@
 
         function resetAdaptiveForCourse(course) {
             const bank = buildQuestionBank(course);
+            answerFeedback = null;
             const studentByObjective = {};
             const questionRatings = {};
             bank.forEach(q => {
@@ -462,9 +597,53 @@
         async function saveProgress() {
             if (!selectedCourse || !adaptive.bank.length) return;
             const pct = Math.round((totalAnswered() / adaptive.bank.length) * 100);
-            const payload = { completed: pct === 100, progressPct: pct };
+            const payload = {
+                completed: pct === 100,
+                progressPct: pct,
+                chapterId: selectedChapterId,
+                activeChapterId: selectedChapterId,
+                understandingPct: understandingPct(),
+                answeredCount: totalAnswered(),
+                totalQuestions: adaptive.bank.length
+            };
+            if (guestMode) {
+                progressRecord = { ...payload, updatedAt: new Date().toISOString() };
+                statusEl.textContent = `Guest session | Completion ${pct}% | Understanding ${understandingPct()}%`;
+                return;
+            }
+            statusEl.textContent = "Saving progress...";
             progressRecord = await API.saveProgress(selectedCourse.id, payload);
             statusEl.textContent = `Saved. Completion ${pct}% | Understanding ${understandingPct()}%`;
+        }
+
+        async function selectStudyChapter(nextChapterId) {
+            selectedChapterId = normalizeSelectedChapter(selectedCourse, nextChapterId);
+            flipCardIndex = 0;
+            flipCardRevealed = false;
+            resetAdaptiveForCourse(selectedCourse);
+            renderSelected();
+
+            const url = new URL(location.href);
+            if (selectedChapterId) url.searchParams.set("chapter", selectedChapterId);
+            else url.searchParams.delete("chapter");
+            history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+
+            if (guestMode) {
+                statusEl.textContent = `Guest challenge: ${selectedChapterName(selectedCourse)}.`;
+                return;
+            }
+
+            statusEl.textContent = "Saving chapter choice...";
+            try {
+                progressRecord = await API.saveProgress(selectedCourse.id, {
+                    activeChapterId: selectedChapterId
+                });
+                renderSelected();
+                statusEl.textContent = `Studying: ${selectedChapterName(selectedCourse)}.`;
+            } catch (err) {
+                console.error("CHAPTER SELECTION SAVE ERROR:", err);
+                statusEl.textContent = "Chapter selected, but the choice could not be saved.";
+            }
         }
 
         function decayRecentWrongFlags() {
@@ -477,7 +656,7 @@
         }
 
         async function answerQuestion(optionIdx) {
-            if (!adaptive.currentQuestion) return;
+            if (!adaptive.currentQuestion || answerFeedback) return;
             const q = adaptive.currentQuestion;
             const level = q.difficulty;
             const correct = optionIdx === q.answerIndex;
@@ -501,9 +680,21 @@
             if (correct) adaptive.scoreEarned += LEVEL_WEIGHT[level];
             adaptive.asked.push({ id: q.id, objectiveId, question: q.question, level, correct });
             adaptive.remaining = adaptive.remaining.filter(x => x.id !== q.id);
-            pickNextQuestion();
+            answerFeedback = {
+                selectedIndex: optionIdx,
+                correctIndex: q.answerIndex,
+                correct
+            };
             renderSelected();
             await saveProgress();
+            renderSelected();
+            updateStats();
+        }
+
+        function advanceQuestion() {
+            answerFeedback = null;
+            pickNextQuestion();
+            renderSelected();
             updateStats();
         }
 
@@ -545,8 +736,9 @@
                 const x = counts(c);
                 const isSelected = selectedCourse && selectedCourse.id === c.id;
                 const courseId = c?.id === undefined || c?.id === null ? "" : String(c.id);
+                const courseHref = guestMode ? "/index.html?guest=1" : `/index.html?course=${encodeURIComponent(courseId)}`;
                 return `
-                    <a class="block rounded-lg border p-3 transition ${isSelected ? "border-blue-400 bg-blue-50 shadow-card" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/70"}" href="/index.html?course=${encodeURIComponent(courseId)}">
+                    <a class="block rounded-lg border p-3 transition ${isSelected ? "border-blue-400 bg-blue-50 shadow-card" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/70"}" href="${courseHref}">
                         <div class="mb-1 text-sm font-extrabold text-slate-900">${esc(c.name || "(untitled)")}</div>
                         <div class="font-mono text-[11px] font-medium text-cyan-700">ID ${esc(c.id || "n/a")}</div>
                         <div class="mt-2 text-xs font-semibold text-slate-600">${x.chapters} chapters | ${x.mcq} MCQs | ${x.flip} cards</div>
@@ -562,12 +754,20 @@
         }
 
         function wireActions() {
+            const chapterSelect = selectedBox.querySelector("[data-chapter-select]");
+            if (chapterSelect) {
+                chapterSelect.onchange = async () => {
+                    await selectStudyChapter(chapterSelect.value || null);
+                };
+            }
             selectedBox.querySelectorAll("[data-answer]").forEach(btn => {
                 btn.onclick = async () => {
                     const option = Number(btn.getAttribute("data-answer"));
                     await answerQuestion(option);
                 };
             });
+            const nextQuestionBtn = selectedBox.querySelector("[data-next-question]");
+            if (nextQuestionBtn) nextQuestionBtn.onclick = advanceQuestion;
             const restartBtn = selectedBox.querySelector("[data-restart]");
             if (restartBtn) restartBtn.onclick = async () => { await restartAssessment(); };
             selectedBox.querySelectorAll("[data-view]").forEach((btn) => {
@@ -634,11 +834,14 @@
             }
 
             const x = counts(selectedCourse);
+            const allChapters = Array.isArray(selectedCourse.chapters) ? selectedCourse.chapters : [];
+            const scopeChapterCount = selectedChapterId ? 1 : x.chapters;
             const q = adaptive.currentQuestion;
             const completionPct = adaptive.bank.length ? Math.round((totalAnswered() / adaptive.bank.length) * 100) : 0;
             const recent = adaptive.asked.slice(-5).reverse();
             const flipCards = flattenFlipCards(selectedCourse);
             const references = chapterReferences(selectedCourse);
+            const savedProgress = selectedProgress();
             clampFlipCardIndex(flipCards);
             const activeFlipCard = flipCards[flipCardIndex] || null;
 
@@ -651,16 +854,33 @@
                         </div>
                         <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                             <button type="button" data-view="assessment" class="rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${studyView === "assessment" ? "border-cyan-600 bg-cyan-600 text-white" : "border-cyan-200 bg-white text-cyan-800"}">Questions</button>
-                            <button type="button" data-view="memory" class="rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${studyView === "memory" ? "border-violet-600 bg-violet-600 text-white" : "border-violet-200 bg-white text-violet-800"}">Flip Cards</button>
+                            ${guestMode ? "" : `<button type="button" data-view="memory" class="rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] ${studyView === "memory" ? "border-violet-600 bg-violet-600 text-white" : "border-violet-200 bg-white text-violet-800"}">Flip Cards</button>`}
                         </div>
                     </div>
                     <p class="mb-4 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${esc(selectedCourse.description || "")}</p>
+                    <section class="mb-4 rounded-xl border border-cyan-200 bg-gradient-to-r from-cyan-50 to-blue-50 p-4 shadow-sm">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                                <label for="chapterStudySelect" class="mb-1 block text-[11px] font-extrabold uppercase tracking-[0.18em] text-cyan-700">Study Chapter</label>
+                                <select id="chapterStudySelect" data-chapter-select class="w-full rounded-lg border border-cyan-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                                    <option value="" ${selectedChapterId ? "" : "selected"}>All Chapters</option>
+                                    ${allChapters.map((chapter, index) => {
+                                        const id = chapterId(chapter, index);
+                                        return `<option value="${esc(id)}" ${selectedChapterId === id ? "selected" : ""}>${esc(chapter?.name || `Chapter ${index + 1}`)}</option>`;
+                                    }).join("")}
+                                </select>
+                            </div>
+                            <div class="text-xs font-semibold text-cyan-900 sm:max-w-xs">
+                                Questions, reference notes, and flip cards are limited to <span class="font-extrabold">${esc(selectedChapterName(selectedCourse))}</span>.
+                            </div>
+                        </div>
+                    </section>
                     ${renderAdminAdBanner()}
 
                     <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">Chapters<div class="mt-1 text-xl font-extrabold text-slate-950">${x.chapters}</div></div>
-                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">MCQs<div class="mt-1 text-xl font-extrabold text-slate-950">${x.mcq}</div></div>
-                        <div class="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs font-bold text-violet-800">Flip Cards<div class="mt-1 text-xl font-extrabold text-violet-950">${flipCards.length}</div></div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">Chapters<div class="mt-1 text-xl font-extrabold text-slate-950">${scopeChapterCount}</div></div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">MCQs<div class="mt-1 text-xl font-extrabold text-slate-950">${adaptive.bank.length}</div></div>
+                        ${guestMode ? "" : `<div class="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs font-bold text-violet-800">Flip Cards<div class="mt-1 text-xl font-extrabold text-violet-950">${flipCards.length}</div></div>`}
                         <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">Completion<div class="mt-1 text-xl font-extrabold text-amber-950">${completionPct}%</div></div>
                         <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800 sm:col-span-2 xl:col-span-1">Understanding<div class="mt-1 text-xl font-extrabold text-emerald-950">${understandingPct()}%</div></div>
                     </div>
@@ -694,7 +914,10 @@
                             <div class="h-3 overflow-hidden rounded bg-white shadow-inner">
                                 <div class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 transition-all" style="width:${completionPct}%"></div>
                             </div>
-                            <div class="mt-2 text-xs font-medium text-slate-600">Last saved: ${progressRecord?.updatedAt ? esc(progressRecord.updatedAt) : "not saved yet"}</div>
+                            <div class="mt-2 text-xs font-medium text-slate-600">
+                                Last saved: ${savedProgress?.updatedAt ? esc(savedProgress.updatedAt) : "not saved yet"}
+                                ${typeof savedProgress?.progressPct === "number" ? ` | Saved completion: ${savedProgress.progressPct}%` : ""}
+                            </div>
                         </div>
 
                         <section class="rounded-xl border border-blue-200 bg-gradient-to-b from-blue-50/80 to-white p-4 shadow-card">
@@ -715,16 +938,50 @@
                                     </div>
                                     <h3 class="mb-3 text-lg font-extrabold text-slate-950">${esc(q.question)}</h3>
                                     <div class="grid gap-2">
-                                        ${q.options.map((opt, i) => `
-                                            <button type="button" data-answer="${i}" class="answer-option rounded-lg border border-cyan-300 border-l-4 border-l-cyan-500 bg-white p-2.5 text-left text-sm font-bold text-slate-800 hover:border-blue-500 hover:border-l-blue-600 hover:bg-cyan-50">
-                                                ${esc(opt)}
-                                            </button>
-                                        `).join("")}
+                                        ${answerFeedback ? q.options.map((opt, i) => {
+                                            const isCorrectAnswer = i === answerFeedback.correctIndex;
+                                            const isWrongSelection = i === answerFeedback.selectedIndex && !answerFeedback.correct;
+                                            const answerClass = isCorrectAnswer
+                                                ? "border-emerald-400 border-l-emerald-600 bg-emerald-50 text-emerald-950"
+                                                : isWrongSelection
+                                                    ? "border-rose-400 border-l-rose-600 bg-rose-50 text-rose-950"
+                                                    : "border-slate-200 border-l-slate-300 bg-slate-50 text-slate-600";
+                                            return `
+                                                <div class="rounded-lg border border-l-4 p-2.5 text-left text-sm font-bold ${answerClass}">
+                                                    ${esc(opt)}
+                                                    ${isCorrectAnswer ? `<span class="float-right text-[10px] font-extrabold uppercase tracking-wide">Correct</span>` : ""}
+                                                    ${isWrongSelection ? `<span class="float-right text-[10px] font-extrabold uppercase tracking-wide">Your answer</span>` : ""}
+                                                </div>
+                                            `;
+                                        }).join("") : q.options.map((opt, i) => `
+                                                <button type="button" data-answer="${i}" class="answer-option rounded-lg border border-cyan-300 border-l-4 border-l-cyan-500 bg-white p-2.5 text-left text-sm font-bold text-slate-800 hover:border-blue-500 hover:border-l-blue-600 hover:bg-cyan-50">
+                                                    ${esc(opt)}
+                                                </button>
+                                            `).join("")}
                                     </div>
+                                    ${answerFeedback ? `
+                                        <div class="mt-4 rounded-xl border p-4 ${answerFeedback.correct ? "border-emerald-300 bg-emerald-50" : "border-rose-300 bg-rose-50"}">
+                                            <div class="text-sm font-extrabold ${answerFeedback.correct ? "text-emerald-900" : "text-rose-900"}">
+                                                ${answerFeedback.correct ? "Correct answer" : "Incorrect answer"}
+                                            </div>
+                                            <div class="mt-2 text-sm font-bold text-slate-900">Correct answer: ${esc(q.options[answerFeedback.correctIndex] || "Not available")}</div>
+                                            <div class="mt-3 rounded-lg border border-white/80 bg-white/80 p-3">
+                                                <div class="text-[11px] font-extrabold uppercase tracking-[0.16em] text-cyan-700">Explanation</div>
+                                                <div class="mt-1 text-sm font-medium leading-relaxed text-slate-700 whitespace-pre-wrap">${esc(q.explanation || "No explanation has been added for this question yet.")}</div>
+                                            </div>
+                                            <button type="button" data-next-question="1" class="mt-3 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700">
+                                                ${adaptive.remaining.length ? "Next Question" : "View Results"}
+                                            </button>
+                                        </div>
+                                    ` : ""}
+                                </section>
+                            ` : adaptive.bank.length ? `
+                                <section class="mb-5 rounded-lg border border-emerald-300 bg-emerald-100 p-4 text-sm font-bold text-emerald-900">
+                                    Assessment complete for ${esc(selectedChapterName(selectedCourse))}. Final understanding score: ${understandingPct()}%.
                                 </section>
                             ` : `
-                                <section class="mb-5 rounded-lg border border-emerald-300 bg-emerald-100 p-4 text-sm font-bold text-emerald-900">
-                                    Assessment complete for this course. Final understanding score: ${understandingPct()}%.
+                                <section class="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">
+                                    No questions are available for ${esc(selectedChapterName(selectedCourse))} yet.
                                 </section>
                             `}
 
@@ -779,37 +1036,55 @@
         }
 
         try {
-            statusEl.textContent = "Loading courses...";
-            try {
-                siteSettings = await API.getSettings();
-            } catch (err) {
-                console.error("SETTINGS LOAD ERROR:", err);
-                siteSettings = null;
-            }
-            courses = await API.getCourses();
-            renderCourses();
-            const selectedId = new URLSearchParams(location.search).get("course");
-            selectedCourse = courses.find(c => String(c?.id) === selectedId) || null;
-
-            if (selectedCourse) {
-                statusEl.textContent = "Preparing adaptive assessment...";
+            if (guestMode) {
+                statusEl.textContent = "Preparing guest challenge...";
+                const guestPayload = await API.getGuestQuestions();
+                selectedCourse = guestCourseFromQuestions(guestPayload);
+                courses = [selectedCourse];
+                const requestedChapterId = new URLSearchParams(location.search).get("chapter");
+                selectedChapterId = normalizeSelectedChapter(selectedCourse, requestedChapterId);
+                progressRecord = null;
                 resetAdaptiveForCourse(selectedCourse);
-                try {
-                    progressRecord = await API.getProgress(selectedCourse.id);
-                } catch (err) {
-                    console.error("PROGRESS LOAD ERROR:", err);
-                    progressRecord = null;
-                }
+                renderCourses();
                 renderSelected();
-                statusEl.textContent = "Ready";
+                statusEl.textContent = `Guest mode ready: ${adaptive.bank.length} questions.`;
             } else {
-                renderSelected();
-                statusEl.textContent = "Ready";
+                statusEl.textContent = "Loading courses...";
+                try {
+                    siteSettings = await API.getSettings();
+                } catch (err) {
+                    console.error("SETTINGS LOAD ERROR:", err);
+                    siteSettings = null;
+                }
+                courses = await API.getCourses();
+                renderCourses();
+                const selectedId = new URLSearchParams(location.search).get("course");
+                selectedCourse = courses.find(c => String(c?.id) === selectedId) || null;
+
+                if (selectedCourse) {
+                    statusEl.textContent = "Preparing adaptive assessment...";
+                    try {
+                        progressRecord = await API.getProgress(selectedCourse.id);
+                    } catch (err) {
+                        console.error("PROGRESS LOAD ERROR:", err);
+                        progressRecord = null;
+                    }
+                    const requestedChapterId = new URLSearchParams(location.search).get("chapter")
+                        || progressRecord?.activeChapterId;
+                    selectedChapterId = normalizeSelectedChapter(selectedCourse, requestedChapterId);
+                    resetAdaptiveForCourse(selectedCourse);
+                    renderSelected();
+                    statusEl.textContent = "Ready";
+                } else {
+                    renderSelected();
+                    statusEl.textContent = "Ready";
+                }
             }
             updateStats();
         } catch (err) {
             console.error("API error:", err);
-            statusEl.textContent = "Failed to load courses.";
+            statusEl.textContent = guestMode ? "Failed to load the guest challenge." : "Failed to load courses.";
+        }
         }
     </script>
 </body>

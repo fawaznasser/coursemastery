@@ -6,6 +6,7 @@ services:
       - .env
     environment:
       - LOCAL_API_PORT=3001
+      - NODE_EXTRA_CA_CERTS=/app/local-ca.pem
     ports:
       - "3001:3001"
     restart: unless-stopped
