@@ -8,6 +8,7 @@ region = "eu-central-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
+parameter_overrides = "FrontendOrigin=https://coursemastery.netlify.app CognitoUserPoolArn=arn:aws:cognito-idp:eu-central-1:672626785669:userpool/eu-central-1_fVi49DC6p"
 
 [default.global.parameters]
 region = "eu-central-1"

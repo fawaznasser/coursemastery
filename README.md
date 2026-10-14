@@ -2,6 +2,8 @@
 
 Static frontend plus AWS-backed serverless API for course content and user progress.
 
+For a public-domain release, follow [PRODUCTION.md](PRODUCTION.md). Do not expose the Docker development API to the internet.
+
 ## Local Run
 
 Prerequisites:

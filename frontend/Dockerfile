@@ -1,9 +1,16 @@
-FROM python:3.12-alpine
+FROM node:24-alpine AS styles
 
-WORKDIR /app
+WORKDIR /build
+COPY package*.json ./
+RUN npm ci
+COPY tailwind.config.js styles.input.css .
+COPY *.html *.js ./
+RUN npm run build
 
-COPY . .
+FROM nginx:stable-alpine
 
-EXPOSE 5500
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY . /usr/share/nginx/html
+COPY --from=styles /build/styles.css /usr/share/nginx/html/styles.css
 
-CMD ["python", "-m", "http.server", "5500", "--bind", "0.0.0.0"]
+EXPOSE 80

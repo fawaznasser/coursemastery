@@ -31,14 +31,20 @@ async function request(path, method = "GET", body) {
     return res.json();
 }
 
-async function publicRequest(path) {
-    const res = await fetch(API_BASE + path);
+async function publicRequest(path, method = "GET", body) {
+    const res = await fetch(API_BASE + path, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined
+    });
     if (!res.ok) throw await res.text();
     return res.json();
 }
 
 export const API = {
     getGuestQuestions: () => publicRequest("/guest/questions"),
+    submitFeedback: (feedback) => publicRequest("/feedback", "POST", feedback),
+    getFeedback: () => request("/feedback"),
     getCourses: () => request("/courses"),
     getSettings: () => request("/settings"),
     saveSettings: (settings) => request("/settings", "PUT", settings),

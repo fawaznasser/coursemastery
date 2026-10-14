@@ -10,18 +10,21 @@ const {
     GetCommand,
     BatchWriteCommand
 } = require("@aws-sdk/lib-dynamodb");
+const { randomUUID } = require("node:crypto");
 
 const { user, admin } = require("./auth");
 
 const ddbClient = new DynamoDBClient({});
 const db = DynamoDBDocumentClient.from(ddbClient);
 const TABLE = process.env.TABLE;
+const FEEDBACK_TABLE = process.env.FEEDBACK_TABLE || TABLE;
 
 function cors() {
     return {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": process.env.ALLOWED_ORIGIN || "*",
         "Access-Control-Allow-Headers": "Authorization,Content-Type",
-        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS"
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Vary": "Origin"
     };
 }
 
@@ -155,6 +158,13 @@ function defaultSettings() {
                 meta: "Sponsored Placement"
             }
         },
+        feedback: {
+            enabled: true,
+            promptAfterAnswers: 5,
+            remindAfterDays: 14,
+            title: "Help us improve CourseMastery",
+            message: "Would you take a minute to tell us about your experience?"
+        },
         updatedAt: null
     };
 }
@@ -171,6 +181,43 @@ function normalizeAdBlock(block, fallback) {
     };
 }
 
+function boundedInteger(value, fallback, minimum, maximum) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
+}
+
+function normalizeFeedback(feedback, fallback = defaultSettings().feedback) {
+    return {
+        enabled: feedback?.enabled !== false,
+        promptAfterAnswers: boundedInteger(feedback?.promptAfterAnswers, fallback.promptAfterAnswers, 1, 100),
+        remindAfterDays: boundedInteger(feedback?.remindAfterDays, fallback.remindAfterDays, 1, 365),
+        title: String(feedback?.title || fallback.title).trim().slice(0, 120),
+        message: String(feedback?.message || fallback.message).trim().slice(0, 500)
+    };
+}
+
+function validateFeedbackSubmission(body) {
+    if (!body || typeof body !== "object") return "Invalid feedback";
+    if (typeof body.fullName !== "string" || !body.fullName.trim()) return "Full name is required";
+    if (body.fullName.trim().length > 120) return "Full name is too long";
+    if (typeof body.email !== "string" || !body.email.trim()) return "Email is required";
+    const email = body.email.trim();
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Enter a valid email address";
+    if (!Number.isInteger(body.rating) || body.rating < 1 || body.rating > 5) return "Rating must be between 1 and 5 stars";
+    if (body.comment !== undefined && typeof body.comment !== "string") return "Comment must be text";
+    if (String(body.comment || "").trim().length > 2000) return "Comment is too long";
+    return null;
+}
+
+function normalizeFeedbackSubmission(body) {
+    return {
+        fullName: body.fullName.trim(),
+        email: body.email.trim().toLowerCase(),
+        rating: body.rating,
+        comment: String(body.comment || "").trim()
+    };
+}
+
 function normalizeSettings(body) {
     const defaults = defaultSettings();
     return {
@@ -180,6 +227,7 @@ function normalizeSettings(body) {
             hero: normalizeAdBlock(body?.ads?.hero, defaults.ads.hero),
             sidebar: normalizeAdBlock(body?.ads?.sidebar, defaults.ads.sidebar)
         },
+        feedback: normalizeFeedback(body?.feedback, defaults.feedback),
         updatedAt: new Date().toISOString()
     };
 }
@@ -233,6 +281,20 @@ async function getAllItems() {
     let lastEvaluatedKey;
     do {
         const result = await db.send(new ScanCommand({ TableName: TABLE, ExclusiveStartKey: lastEvaluatedKey }));
+        items.push(...(result.Items || []));
+        lastEvaluatedKey = result.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+    return items;
+}
+
+async function getFeedbackItems() {
+    const items = [];
+    let lastEvaluatedKey;
+    do {
+        const result = await db.send(new ScanCommand({
+            TableName: FEEDBACK_TABLE,
+            ExclusiveStartKey: lastEvaluatedKey
+        }));
         items.push(...(result.Items || []));
         lastEvaluatedKey = result.LastEvaluatedKey;
     } while (lastEvaluatedKey);
@@ -366,11 +428,22 @@ async function replaceChapterContent(courseId, chapter, chapterOrder) {
 async function getHydratedCourses() {
     const items = await getAllItems();
     return items
-        .filter(item => item?.id !== SETTINGS_ID && item?.type !== "course-content")
+        .filter(item => item?.id !== SETTINGS_ID && item?.type !== "course-content" && item?.type !== "feedback")
         .map(course => hydrateCourse(course, items));
 }
 
 const GUEST_QUESTION_LIMIT = 100;
+const GUEST_CACHE_SECONDS = Math.max(60, Number(process.env.GUEST_CACHE_SECONDS || 300));
+let guestQuestionCache = null;
+
+function stableHash(value) {
+    let hash = 2166136261;
+    for (const char of String(value)) {
+        hash ^= char.charCodeAt(0);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
 
 function getGuestQuestionSample(courses, limit = GUEST_QUESTION_LIMIT) {
     const questions = [];
@@ -394,12 +467,33 @@ function getGuestQuestionSample(courses, limit = GUEST_QUESTION_LIMIT) {
         }
     }
 
-    for (let index = questions.length - 1; index > 0; index -= 1) {
-        const randomIndex = Math.floor(Math.random() * (index + 1));
-        [questions[index], questions[randomIndex]] = [questions[randomIndex], questions[index]];
-    }
+    questions.sort((left, right) => {
+        const hashDifference = stableHash(left.id) - stableHash(right.id);
+        return hashDifference || left.id.localeCompare(right.id);
+    });
 
     return questions.slice(0, limit);
+}
+
+async function getCachedGuestPayload() {
+    const now = Date.now();
+    if (guestQuestionCache && guestQuestionCache.expiresAt > now) {
+        return guestQuestionCache.payload;
+    }
+
+    const questions = getGuestQuestionSample(await getHydratedCourses());
+    const storedSettings = await getCourseById(SETTINGS_ID);
+    const payload = {
+        questions,
+        count: questions.length,
+        limit: GUEST_QUESTION_LIMIT,
+        feedback: normalizeFeedback(storedSettings?.feedback)
+    };
+    guestQuestionCache = {
+        payload,
+        expiresAt: now + (GUEST_CACHE_SECONDS * 1000)
+    };
+    return payload;
 }
 
 function getPathname(eventPath = "") {
@@ -448,25 +542,91 @@ exports.handler = async (event) => {
         const pathname = getPathname(event.path);
 
         if (event.httpMethod === "GET" && pathname === "/guest/questions") {
-            const questions = getGuestQuestionSample(await getHydratedCourses());
+            const payload = await getCachedGuestPayload();
             return {
                 statusCode: 200,
-                headers: { ...cors(), "Cache-Control": "no-store", "Content-Type": "application/json" },
-                body: JSON.stringify({ questions, count: questions.length, limit: GUEST_QUESTION_LIMIT })
+                headers: {
+                    ...cors(),
+                    "Cache-Control": `public, max-age=${GUEST_CACHE_SECONDS}, s-maxage=${GUEST_CACHE_SECONDS}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            };
+        }
+
+        if (event.httpMethod === "POST" && pathname === "/feedback") {
+            if (String(event.body || "").length > 10_000) {
+                return {
+                    statusCode: 413,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Feedback submission is too large" })
+                };
+            }
+
+            let body;
+            try {
+                body = JSON.parse(event.body || "{}");
+            } catch {
+                return {
+                    statusCode: 400,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Feedback must be valid JSON" })
+                };
+            }
+
+            const validationError = validateFeedbackSubmission(body);
+            if (validationError) {
+                return {
+                    statusCode: 400,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: validationError })
+                };
+            }
+
+            const submittedAt = new Date().toISOString();
+            const feedback = {
+                id: `__feedback__#${Date.now()}#${randomUUID()}`,
+                type: "feedback",
+                ...normalizeFeedbackSubmission(body),
+                submittedAt
+            };
+            await db.send(new PutCommand({ TableName: FEEDBACK_TABLE, Item: feedback }));
+
+            return {
+                statusCode: 201,
+                headers: { ...cors(), "Content-Type": "application/json", "Cache-Control": "no-store" },
+                body: JSON.stringify({ id: feedback.id, submittedAt })
             };
         }
 
         const u = user(event);
         const settingsMatch = pathname === "/settings";
+        const feedbackMatch = pathname === "/feedback";
         const chapterCollectionMatch = pathname.match(/\/courses\/([^/]+)\/chapters$/);
         const chapterItemMatch = pathname.match(/\/courses\/([^/]+)\/chapters\/([^/]+)$/);
 
         if (event.httpMethod === "GET" && settingsMatch) {
             const settings = await getCourseById(SETTINGS_ID);
+            const responseSettings = settings
+                ? { ...settings, feedback: normalizeFeedback(settings.feedback) }
+                : defaultSettings();
             return {
                 statusCode: 200,
                 headers: { ...cors(), "Content-Type": "application/json" },
-                body: JSON.stringify(settings || defaultSettings())
+                body: JSON.stringify(responseSettings)
+            };
+        }
+
+        if (event.httpMethod === "GET" && feedbackMatch) {
+            admin(u);
+            const feedback = (await getFeedbackItems())
+                .filter(item => item?.type === "feedback")
+                .sort((left, right) => String(right.submittedAt).localeCompare(String(left.submittedAt)))
+                .slice(0, 500);
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json", "Cache-Control": "no-store" },
+                body: JSON.stringify(feedback)
             };
         }
 
@@ -524,6 +684,7 @@ exports.handler = async (event) => {
         }
 
         admin(u);
+        guestQuestionCache = null;
 
         if (event.httpMethod === "PUT" && settingsMatch) {
             const body = JSON.parse(event.body || "{}");
@@ -724,11 +885,10 @@ exports.handler = async (event) => {
             body: JSON.stringify(course)
         };
     } catch (err) {
-        console.error("COURSES ERROR:", err);
-
         const isForbidden = err === "Forbidden";
         const isUnauthorized = err === "Unauthorized";
         const isValidation = err?.name === "ValidationException" || String(err?.message || "").includes("Item size");
+        if (!isForbidden && !isUnauthorized) console.error("COURSES ERROR:", err);
         const statusCode = isForbidden ? 403 : isUnauthorized ? 401 : isValidation ? 400 : 500;
         const response = isForbidden
             ? { message: "Forbidden" }
@@ -744,4 +904,15 @@ exports.handler = async (event) => {
             body: JSON.stringify(response)
         };
     }
+};
+
+exports._test = {
+    getGuestQuestionSample,
+    normalizeFeedback,
+    normalizeFeedbackSubmission,
+    stableHash,
+    validateFeedbackSubmission,
+    validateCourse,
+    validateChapter,
+    validateMcq
 };

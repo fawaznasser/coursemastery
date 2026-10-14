@@ -16,9 +16,10 @@ const TABLE = process.env.TABLE;
 
 function cors() {
     return {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": process.env.ALLOWED_ORIGIN || "*",
         "Access-Control-Allow-Headers": "Authorization,Content-Type",
-        "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Vary": "Origin"
     };
 }
 
@@ -142,10 +143,9 @@ exports.handler = async (event) => {
             body: JSON.stringify(progress)
         };
     } catch (err) {
-        console.error("PROGRESS ERROR:", err);
-
         const statusCode = err === "Unauthorized" ? 401 : 500;
         const message = err === "Unauthorized" ? "Unauthorized" : "Internal server error";
+        if (err !== "Unauthorized") console.error("PROGRESS ERROR:", err);
 
         return {
             statusCode,
@@ -154,3 +154,5 @@ exports.handler = async (event) => {
         };
     }
 };
+
+exports._test = { validateProgress, progressDetails };

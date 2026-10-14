@@ -55,6 +55,22 @@ if (-not (Test-Path (Join-Path $BackendDir "node_modules"))) {
     }
 }
 
+if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
+    Push-Location $FrontendDir
+    try {
+        cmd /c npm ci
+    } finally {
+        Pop-Location
+    }
+}
+
+Push-Location $FrontendDir
+try {
+    cmd /c npm run build
+} finally {
+    Pop-Location
+}
+
 $BackendOut = Join-Path $BackendDir "local-api.out.log"
 $BackendErr = Join-Path $BackendDir "local-api.err.log"
 $FrontendOut = Join-Path $FrontendDir "frontend.out.log"

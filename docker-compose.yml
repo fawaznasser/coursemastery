@@ -2,20 +2,27 @@ services:
   backend:
     build:
       context: ./backend
-    env_file:
-      - .env
     environment:
-      - LOCAL_API_PORT=3001
-      - NODE_EXTRA_CA_CERTS=/app/local-ca.pem
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      COURSES_TABLE: ${COURSES_TABLE}
+      PROGRESS_TABLE: ${PROGRESS_TABLE}
+      FEEDBACK_TABLE: ${FEEDBACK_TABLE:-}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+      LOCAL_API_PORT: 3001
+      LOCAL_API_HOST: 0.0.0.0
+      NODE_EXTRA_CA_CERTS: /app/local-ca.pem
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
     ports:
-      - "5500:5500"
+      - "127.0.0.1:5500:80"
     depends_on:
       - backend
     restart: unless-stopped

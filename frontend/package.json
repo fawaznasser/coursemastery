@@ -1,0 +1,11 @@
+{
+  "name": "coursemastery-frontend",
+  "private": true,
+  "scripts": {
+    "build": "tailwindcss -i ./styles.input.css -o ./styles.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.0",
+    "tailwindcss": "4.3.3"
+  }
+}

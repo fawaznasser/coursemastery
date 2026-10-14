@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const http = require("http");
 const { DynamoDBClient, ListTablesCommand } = require("@aws-sdk/client-dynamodb");
+const { CognitoJwtVerifier } = require("aws-jwt-verify");
 
 function loadDotEnv(envPath) {
     if (!fs.existsSync(envPath)) return;
@@ -22,7 +23,8 @@ function loadDotEnv(envPath) {
 function guessTables(names) {
     const courses = names.find((n) => n.includes("CoursesTable"));
     const progress = names.find((n) => n.includes("ProgressTable"));
-    return { courses, progress };
+    const feedback = names.find((n) => n.includes("FeedbackTable"));
+    return { courses, progress, feedback };
 }
 
 function loadHandler(moduleName, tableName) {
@@ -32,15 +34,21 @@ function loadHandler(moduleName, tableName) {
     return require(fullPath).handler;
 }
 
-function toEvent(req, body, routeParams) {
+function toEvent(req, body, routeParams, claims) {
     return {
         httpMethod: req.method,
         path: req.url,
         headers: req.headers || {},
         body: body.length ? body : null,
         pathParameters: routeParams || null,
-        requestContext: {}
+        requestContext: claims ? { authorizer: { claims } } : {}
     };
+}
+
+function bearerToken(req) {
+    const raw = req.headers?.authorization;
+    if (!raw || !raw.startsWith("Bearer ")) return null;
+    return raw.slice(7).trim() || null;
 }
 
 async function main() {
@@ -48,7 +56,7 @@ async function main() {
     process.env.AWS_REGION = process.env.AWS_REGION || "eu-central-1";
 
     let guessed = {};
-    if (!process.env.COURSES_TABLE || !process.env.PROGRESS_TABLE) {
+    if (!process.env.COURSES_TABLE || !process.env.PROGRESS_TABLE || !process.env.FEEDBACK_TABLE) {
         const db = new DynamoDBClient({ region: process.env.AWS_REGION });
         const listed = await db.send(new ListTablesCommand({}));
         guessed = guessTables(listed.TableNames || []);
@@ -56,13 +64,23 @@ async function main() {
 
     const coursesTable = process.env.COURSES_TABLE || guessed.courses;
     const progressTable = process.env.PROGRESS_TABLE || guessed.progress;
+    const feedbackTable = process.env.FEEDBACK_TABLE || guessed.feedback || coursesTable;
+    const userPoolId = process.env.COGNITO_USER_POOL_ID;
+    const clientId = process.env.COGNITO_CLIENT_ID;
+    const jwtVerifier = userPoolId && clientId
+        ? CognitoJwtVerifier.create({ userPoolId, tokenUse: "id", clientId })
+        : null;
 
     if (!coursesTable || !progressTable) {
         throw new Error("Could not resolve DynamoDB tables. Set COURSES_TABLE and PROGRESS_TABLE in .env");
     }
 
+    process.env.FEEDBACK_TABLE = feedbackTable;
+    const coursesHandler = loadHandler("courses.js", coursesTable);
+    const progressHandler = loadHandler("progress.js", progressTable);
+
     const port = Number(process.env.LOCAL_API_PORT || 3001);
-    const host = process.env.LOCAL_API_HOST || "0.0.0.0";
+    const host = process.env.LOCAL_API_HOST || "127.0.0.1";
 
     const server = http.createServer(async (req, res) => {
         try {
@@ -82,10 +100,10 @@ async function main() {
             const progressMatch = pathname.match(/^\/progress\/([^/]+)$/);
 
             let handler;
-            if (pathname === "/courses" || pathname === "/settings" || pathname === "/guest/questions" || courseMatch || courseChaptersMatch || courseChapterItemMatch) {
-                handler = loadHandler("courses.js", coursesTable);
+            if (pathname === "/courses" || pathname === "/settings" || pathname === "/feedback" || pathname === "/guest/questions" || courseMatch || courseChaptersMatch || courseChapterItemMatch) {
+                handler = coursesHandler;
             } else if (progressMatch) {
-                handler = loadHandler("progress.js", progressTable);
+                handler = progressHandler;
             } else {
                 res.writeHead(404, { "Content-Type": "application/json" });
                 res.end(JSON.stringify({ message: "Not found" }));
@@ -112,7 +130,16 @@ async function main() {
             } else if (progressMatch) {
                 routeParams = { courseId: decodeURIComponent(progressMatch[1]) };
             }
-            const event = toEvent(req, body, routeParams);
+            const token = bearerToken(req);
+            let claims = null;
+            if (token && jwtVerifier) {
+                try {
+                    claims = await jwtVerifier.verify(token);
+                } catch (err) {
+                    console.warn("Rejected invalid Cognito token:", err?.message || "verification failed");
+                }
+            }
+            const event = toEvent(req, body, routeParams, claims);
             const result = await handler(event);
 
             res.writeHead(result.statusCode || 200, result.headers || {});

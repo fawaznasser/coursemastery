@@ -1,6 +1,9 @@
 .env
 backend/node_modules/
+backend/.aws-sam/
+frontend/node_modules/
 backend/local-api.out.log
 backend/local-api.err.log
 backend/local-ca.pem
 frontend/*.log
+frontend/styles.css

@@ -34,5 +34,16 @@ export function resolveAuthEnvironment(origin = window.location.origin) {
     }
 
     const fallback = AUTH_CONFIG.environments[AUTH_CONFIG.defaultEnvironment];
+    if (String(origin).startsWith("https://")) {
+        const appUrl = new URL("/index.html", origin).toString();
+        return {
+            name: "custom-domain",
+            ...fallback,
+            origins: [origin],
+            redirectUri: appUrl,
+            logoutUri: appUrl
+        };
+    }
+
     return { name: AUTH_CONFIG.defaultEnvironment, ...fallback };
 }

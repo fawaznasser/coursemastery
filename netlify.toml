@@ -1,5 +1,17 @@
 [build]
 publish = "frontend"
+command = "npm --prefix frontend ci && npm --prefix frontend run build"
 
 [build.environment]
-NODE_VERSION = "20"
+NODE_VERSION = "24"
+
+[[headers]]
+for = "/*"
+
+  [headers.values]
+  Content-Security-Policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://b3v2z6iqdf.execute-api.eu-central-1.amazonaws.com https://eu-central-1fvi49dc6p.auth.eu-central-1.amazoncognito.com"
+  Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+  Referrer-Policy = "strict-origin-when-cross-origin"
+  Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+  X-Content-Type-Options = "nosniff"
+  X-Frame-Options = "DENY"

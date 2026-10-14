@@ -8,41 +8,11 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        ink: "#0f172a",
-                        shell: "#f3f7fb",
-                        panel: "#ffffff",
-                        focus: "#0284c7",
-                        focusdark: "#075985",
-                        mastery: "#16a34a",
-                        challenge: "#f59e0b",
-                        gap: "#e11d48",
-                        cyanx: "#0891b2",
-                        bluex: "#2563eb",
-                        amberx: "#d97706",
-                        greenx: "#15803d",
-                        redx: "#b91c1c"
-                    },
-                    fontFamily: {
-                        sans: ["Manrope", "system-ui", "sans-serif"],
-                        mono: ["IBM Plex Mono", "ui-monospace", "monospace"]
-                    },
-                    boxShadow: {
-                        soft: "0 10px 30px rgba(15, 23, 42, 0.08)",
-                        card: "0 2px 12px rgba(15, 23, 42, 0.08)"
-                    }
-                }
-            }
-        };
-    </script>
+    <link rel="stylesheet" href="./styles.css?v=PROD1" />
     <style>
         body {
             background:
@@ -151,6 +121,8 @@
                     <h1 class="bg-gradient-to-r from-cyan-700 to-blue-800 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">CourseMastery</h1>
                     <p class="text-xs font-semibold text-cyan-800">Adaptive Understanding Dashboard</p>
                 </div>
+                <button id="backBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:border-cyan-400 hover:bg-cyan-50 hover:text-cyan-800" aria-label="Go back">← Back</button>
+                <button id="feedbackBtn" type="button" class="hidden rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-800 shadow-sm hover:bg-cyan-100">Feedback</button>
                 <button id="logout" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 shadow-sm hover:bg-rose-100">Logout</button>
                 <button id="adminBtn" class="hidden rounded-lg border border-blue-700 bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700" onclick="location.href='admin.html'">Admin</button>
             </div>
@@ -203,6 +175,49 @@
         </div>
     </div>
 
+    <div id="feedbackModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/50 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="feedbackModalTitle">
+        <div class="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl border border-cyan-200 bg-white p-6 shadow-soft">
+            <div class="mb-4 flex items-start gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-xl text-amber-500" aria-hidden="true">★</div>
+                <div>
+                    <div class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-cyan-700">Quick feedback</div>
+                    <h2 id="feedbackModalTitle" class="mt-1 text-xl font-extrabold text-slate-950">Help us improve CourseMastery</h2>
+                </div>
+            </div>
+            <p id="feedbackModalMessage" class="text-sm font-medium leading-relaxed text-slate-600">Would you take a minute to tell us about your experience?</p>
+            <form id="feedbackForm" class="mt-5 space-y-4">
+                <fieldset>
+                    <legend class="mb-2 text-sm font-extrabold text-slate-800">How would you rate your experience?</legend>
+                    <div id="feedbackStars" class="flex gap-1" role="radiogroup" aria-label="Rating out of five stars">
+                        <button type="button" data-feedback-rating="1" class="text-3xl text-slate-300 transition hover:text-amber-400" role="radio" aria-checked="false" aria-label="1 out of 5 stars">★</button>
+                        <button type="button" data-feedback-rating="2" class="text-3xl text-slate-300 transition hover:text-amber-400" role="radio" aria-checked="false" aria-label="2 out of 5 stars">★</button>
+                        <button type="button" data-feedback-rating="3" class="text-3xl text-slate-300 transition hover:text-amber-400" role="radio" aria-checked="false" aria-label="3 out of 5 stars">★</button>
+                        <button type="button" data-feedback-rating="4" class="text-3xl text-slate-300 transition hover:text-amber-400" role="radio" aria-checked="false" aria-label="4 out of 5 stars">★</button>
+                        <button type="button" data-feedback-rating="5" class="text-3xl text-slate-300 transition hover:text-amber-400" role="radio" aria-checked="false" aria-label="5 out of 5 stars">★</button>
+                    </div>
+                </fieldset>
+                <div>
+                    <label for="feedbackFullName" class="mb-1 block text-sm font-bold text-slate-700">Full name</label>
+                    <input id="feedbackFullName" name="fullName" autocomplete="name" maxlength="120" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100" />
+                </div>
+                <div>
+                    <label for="feedbackEmail" class="mb-1 block text-sm font-bold text-slate-700">Email address</label>
+                    <input id="feedbackEmail" name="email" type="email" autocomplete="email" maxlength="254" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100" />
+                </div>
+                <div>
+                    <label for="feedbackComment" class="mb-1 block text-sm font-bold text-slate-700">Comment <span class="font-medium text-slate-500">(optional)</span></label>
+                    <textarea id="feedbackComment" name="comment" maxlength="2000" rows="4" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100" placeholder="Tell us what worked well or what we should improve."></textarea>
+                </div>
+                <p class="text-xs font-medium text-slate-500">Your name, email, rating, and optional comment will be stored for the site administrator to review.</p>
+                <div id="feedbackFormStatus" class="hidden rounded-lg px-3 py-2 text-sm font-bold" aria-live="polite"></div>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    <button id="feedbackLaterBtn" type="button" class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-extrabold text-slate-700 hover:bg-slate-50">Maybe later</button>
+                    <button id="feedbackSubmitBtn" type="submit" class="rounded-xl border border-blue-700 bg-blue-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-card hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">Submit feedback</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script type="module">
         import {
             parseAuth,
@@ -235,6 +250,10 @@
         const logoutButton = document.getElementById("logout");
         logoutButton.textContent = guestMode ? "Exit Guest" : "Logout";
         logoutButton.onclick = guestMode ? () => { location.href = "/index.html"; } : logout;
+        document.getElementById("backBtn").onclick = () => {
+            if (window.history.length > 1) window.history.back();
+            else location.href = "/index.html";
+        };
 
         const statusEl = document.getElementById("status");
         const activityPanel = document.getElementById("activityPanel");
@@ -248,6 +267,18 @@
         const statLevel = document.getElementById("statLevel");
         const statUnderstanding = document.getElementById("statUnderstanding");
         const statAnswered = document.getElementById("statAnswered");
+        const feedbackBtn = document.getElementById("feedbackBtn");
+        const feedbackModal = document.getElementById("feedbackModal");
+        const feedbackModalTitle = document.getElementById("feedbackModalTitle");
+        const feedbackModalMessage = document.getElementById("feedbackModalMessage");
+        const feedbackForm = document.getElementById("feedbackForm");
+        const feedbackFullName = document.getElementById("feedbackFullName");
+        const feedbackEmail = document.getElementById("feedbackEmail");
+        const feedbackComment = document.getElementById("feedbackComment");
+        const feedbackRatingButtons = [...document.querySelectorAll("[data-feedback-rating]")];
+        const feedbackFormStatus = document.getElementById("feedbackFormStatus");
+        const feedbackLaterBtn = document.getElementById("feedbackLaterBtn");
+        const feedbackSubmitBtn = document.getElementById("feedbackSubmitBtn");
 
         let courses = [];
         let courseSearchQuery = "";
@@ -258,6 +289,125 @@
         let flipCardIndex = 0;
         let flipCardRevealed = false;
         let answerFeedback = null;
+        let feedbackSettings = null;
+        let selectedFeedbackRating = 0;
+        const FEEDBACK_NEXT_PROMPT_KEY = "courseMastery.feedback.nextPromptAt";
+
+        function configureFeedback(raw) {
+            feedbackSettings = raw && raw.enabled !== false
+                ? {
+                    promptAfterAnswers: Math.max(1, Math.min(100, Number(raw?.promptAfterAnswers) || 5)),
+                    remindAfterDays: Math.max(1, Math.min(365, Number(raw?.remindAfterDays) || 14)),
+                    title: String(raw?.title || "Help us improve CourseMastery"),
+                    message: String(raw?.message || "Would you take a minute to tell us about your experience?")
+                }
+                : null;
+            feedbackBtn.classList.toggle("hidden", !feedbackSettings);
+        }
+
+        function updateFeedbackStars() {
+            feedbackRatingButtons.forEach((button) => {
+                const rating = Number(button.getAttribute("data-feedback-rating"));
+                const selected = rating <= selectedFeedbackRating;
+                button.classList.toggle("text-amber-400", selected);
+                button.classList.toggle("text-slate-300", !selected);
+                button.setAttribute("aria-checked", String(rating === selectedFeedbackRating));
+            });
+        }
+
+        function showFeedbackStatus(message, isError = false) {
+            feedbackFormStatus.textContent = message;
+            feedbackFormStatus.classList.remove("hidden", "border-rose-200", "bg-rose-50", "text-rose-700", "border-emerald-200", "bg-emerald-50", "text-emerald-700");
+            feedbackFormStatus.classList.add(
+                isError ? "border-rose-200" : "border-emerald-200",
+                isError ? "bg-rose-50" : "bg-emerald-50",
+                isError ? "text-rose-700" : "text-emerald-700"
+            );
+        }
+
+        function setNextFeedbackPrompt(days) {
+            const nextPromptAt = Date.now() + (days * 24 * 60 * 60 * 1000);
+            try {
+                localStorage.setItem(FEEDBACK_NEXT_PROMPT_KEY, String(nextPromptAt));
+            } catch {
+                // Feedback still works when browser storage is unavailable.
+            }
+        }
+
+        function closeFeedbackPrompt(remind = true) {
+            feedbackModal.classList.add("hidden");
+            feedbackModal.classList.remove("flex");
+            if (remind && feedbackSettings) setNextFeedbackPrompt(feedbackSettings.remindAfterDays);
+        }
+
+        function showFeedbackPrompt(manual = false) {
+            if (!feedbackSettings) return;
+            let nextPromptAt = 0;
+            try {
+                nextPromptAt = Number(localStorage.getItem(FEEDBACK_NEXT_PROMPT_KEY) || 0);
+            } catch {
+                nextPromptAt = 0;
+            }
+            if (!manual && (totalAnswered() < feedbackSettings.promptAfterAnswers || Date.now() < nextPromptAt)) return;
+
+            feedbackModalTitle.textContent = feedbackSettings.title;
+            feedbackModalMessage.textContent = feedbackSettings.message;
+            if (!feedbackFullName.value && user) {
+                feedbackFullName.value = user.name || [user.given_name, user.family_name].filter(Boolean).join(" ") || "";
+            }
+            if (!feedbackEmail.value && user?.email) feedbackEmail.value = user.email;
+            feedbackFormStatus.classList.add("hidden");
+            feedbackModal.classList.remove("hidden");
+            feedbackModal.classList.add("flex");
+            (selectedFeedbackRating ? feedbackFullName : feedbackRatingButtons[4]).focus();
+        }
+
+        feedbackBtn.onclick = () => showFeedbackPrompt(true);
+        feedbackLaterBtn.onclick = () => closeFeedbackPrompt(true);
+        feedbackRatingButtons.forEach((button) => {
+            button.onclick = () => {
+                selectedFeedbackRating = Number(button.getAttribute("data-feedback-rating"));
+                updateFeedbackStars();
+                feedbackFormStatus.classList.add("hidden");
+            };
+        });
+        feedbackForm.onsubmit = async (event) => {
+            event.preventDefault();
+            if (!selectedFeedbackRating) {
+                showFeedbackStatus("Select a rating from 1 to 5 stars.", true);
+                feedbackRatingButtons[0].focus();
+                return;
+            }
+            if (!feedbackForm.reportValidity()) return;
+
+            feedbackSubmitBtn.disabled = true;
+            feedbackLaterBtn.disabled = true;
+            showFeedbackStatus("Submitting feedback...");
+            try {
+                await API.submitFeedback({
+                    fullName: feedbackFullName.value.trim(),
+                    email: feedbackEmail.value.trim(),
+                    rating: selectedFeedbackRating,
+                    comment: feedbackComment.value.trim()
+                });
+                showFeedbackStatus("Thank you. Your feedback was submitted.");
+                setNextFeedbackPrompt(180);
+                feedbackForm.reset();
+                selectedFeedbackRating = 0;
+                updateFeedbackStars();
+                setTimeout(() => closeFeedbackPrompt(false), 900);
+            } catch (err) {
+                console.error("FEEDBACK SUBMIT ERROR:", err);
+                showFeedbackStatus("Feedback could not be submitted. Please try again.", true);
+            } finally {
+                feedbackSubmitBtn.disabled = false;
+                feedbackLaterBtn.disabled = false;
+            }
+        };
+        feedbackModal.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") closeFeedbackPrompt(true);
+        });
+
         function syncLoadingState() {
             const isLoading = statusEl.textContent.trim().endsWith("...");
             loadingProgress.classList.toggle("hidden", !isLoading);
@@ -689,6 +839,7 @@
             await saveProgress();
             renderSelected();
             updateStats();
+            showFeedbackPrompt(false);
         }
 
         function advanceQuestion() {
@@ -1039,6 +1190,7 @@
             if (guestMode) {
                 statusEl.textContent = "Preparing guest challenge...";
                 const guestPayload = await API.getGuestQuestions();
+                configureFeedback(guestPayload.feedback);
                 selectedCourse = guestCourseFromQuestions(guestPayload);
                 courses = [selectedCourse];
                 const requestedChapterId = new URLSearchParams(location.search).get("chapter");
@@ -1052,9 +1204,11 @@
                 statusEl.textContent = "Loading courses...";
                 try {
                     siteSettings = await API.getSettings();
+                    configureFeedback(siteSettings?.feedback);
                 } catch (err) {
                     console.error("SETTINGS LOAD ERROR:", err);
                     siteSettings = null;
+                    configureFeedback(null);
                 }
                 courses = await API.getCourses();
                 renderCourses();

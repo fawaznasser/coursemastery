@@ -2,42 +2,17 @@
 <html lang="en">
 
 <head>
+    <meta charset="UTF-8" />
     <title>CourseMastery Admin</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        ink: "#0f172a",
-                        shell: "#f3f7fb",
-                        panel: "#ffffff",
-                        focus: "#0284c7",
-                        mastery: "#16a34a",
-                        challenge: "#f59e0b",
-                        gap: "#e11d48",
-                        cyanx: "#0891b2",
-                        bluex: "#2563eb"
-                    },
-                    fontFamily: {
-                        sans: ["Manrope", "system-ui", "sans-serif"],
-                        mono: ["IBM Plex Mono", "ui-monospace", "monospace"]
-                    },
-                    boxShadow: {
-                        soft: "0 10px 30px rgba(15, 23, 42, 0.08)",
-                        card: "0 2px 12px rgba(15, 23, 42, 0.08)"
-                    }
-                }
-            }
-        };
-    </script>
+    <link rel="stylesheet" href="./styles.css?v=PROD1" />
     <style>
         body {
             background:
@@ -118,7 +93,7 @@
                     <h1 class="bg-gradient-to-r from-cyan-700 to-blue-800 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">CourseMastery Admin</h1>
                     <p class="text-xs font-semibold text-blue-800">Course and assessment content workspace</p>
                 </div>
-                <button id="backBtn" class="rounded-lg border border-cyan-700 bg-cyan-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-cyan-700">Back to Study</button>
+                <button id="backBtn" type="button" class="rounded-lg border border-cyan-700 bg-cyan-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-cyan-700">← Back</button>
             </div>
         </header>
 
@@ -170,8 +145,8 @@
                 </div>
                 <section class="mb-4 rounded-lg border border-amber-200 bg-amber-50/70 p-4">
                     <div class="mb-3">
-                        <h2 class="text-lg font-extrabold text-amber-950">Ad Placements</h2>
-                        <p class="text-xs font-semibold text-amber-800">These sections are visible on the study page for admin users only.</p>
+                        <h2 class="text-lg font-extrabold text-amber-950">Site Settings</h2>
+                        <p class="text-xs font-semibold text-amber-800">Configure admin ad previews and the learner feedback prompt.</p>
                     </div>
                     <form id="adsForm" class="space-y-4">
                         <div class="rounded-lg border border-amber-200 bg-white p-3">
@@ -214,8 +189,43 @@
                                 </div>
                             </div>
                         </div>
-                        <button type="submit" class="rounded-lg border border-amber-700 bg-amber-500 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-600">Save Ad Settings</button>
+                        <div class="rounded-lg border border-cyan-200 bg-cyan-50/60 p-3">
+                            <div class="mb-3 flex items-center justify-between gap-2">
+                                <div>
+                                    <h3 class="font-extrabold text-cyan-950">Learner Feedback</h3>
+                                    <p class="mt-1 text-xs font-semibold text-cyan-800">Ask learners for feedback after they have used the assessment.</p>
+                                </div>
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-700"><input id="feedbackEnabled" type="checkbox" class="h-4 w-4" /> Enabled</label>
+                            </div>
+                            <div class="grid gap-2">
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <div>
+                                        <label for="feedbackPromptAfter" class="mb-1 block text-xs font-bold text-slate-700">Ask after answered questions</label>
+                                        <input id="feedbackPromptAfter" type="number" min="1" max="100" class="field w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value="5" />
+                                    </div>
+                                    <div>
+                                        <label for="feedbackRemindDays" class="mb-1 block text-xs font-bold text-slate-700">Remind after dismissal (days)</label>
+                                        <input id="feedbackRemindDays" type="number" min="1" max="365" class="field w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value="14" />
+                                    </div>
+                                </div>
+                                <input id="feedbackTitle" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" maxlength="120" placeholder="Feedback prompt title" />
+                                <textarea id="feedbackMessage" class="field rounded-lg border border-slate-200 px-3 py-2 text-sm" maxlength="500" rows="3" placeholder="Feedback prompt message"></textarea>
+                            </div>
+                        </div>
+                        <button type="submit" class="rounded-lg border border-amber-700 bg-amber-500 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-600">Save Site Settings</button>
                     </form>
+                </section>
+                <section class="mb-4 rounded-lg border border-violet-200 bg-violet-50/60 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-extrabold text-violet-950">Feedback Responses</h2>
+                            <p class="text-xs font-semibold text-violet-800">Only administrators can view submitted names, emails, ratings, and comments.</p>
+                        </div>
+                        <button id="refreshFeedbackBtn" type="button" class="rounded-lg border border-violet-300 bg-white px-3 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100">Refresh</button>
+                    </div>
+                    <div id="feedbackResponses" class="space-y-2">
+                        <div class="rounded-lg border border-dashed border-violet-300 bg-white p-3 text-xs font-semibold text-slate-500">Loading feedback...</div>
+                    </div>
                 </section>
                 <div id="admin" class="space-y-3"></div>
             </section>
@@ -269,6 +279,13 @@
         const sidebarCta = document.getElementById("sidebarCta");
         const sidebarImageFile = document.getElementById("sidebarImageFile");
         const sidebarImagePreview = document.getElementById("sidebarImagePreview");
+        const feedbackEnabled = document.getElementById("feedbackEnabled");
+        const feedbackPromptAfter = document.getElementById("feedbackPromptAfter");
+        const feedbackRemindDays = document.getElementById("feedbackRemindDays");
+        const feedbackTitle = document.getElementById("feedbackTitle");
+        const feedbackMessage = document.getElementById("feedbackMessage");
+        const feedbackResponses = document.getElementById("feedbackResponses");
+        const refreshFeedbackBtn = document.getElementById("refreshFeedbackBtn");
 
         let chapters = [];
         let editingCourseId = null;
@@ -288,7 +305,10 @@
             subtree: true
         });
         syncLoadingState();
-        document.getElementById("backBtn").onclick = () => location.href = "/index.html";
+        document.getElementById("backBtn").onclick = () => {
+            if (window.history.length > 1) window.history.back();
+            else location.href = "/index.html";
+        };
         function createEmptyMcqDraft() {
             return {
                 question: "",
@@ -702,6 +722,7 @@
         function fillAdsForm(settings) {
             const hero = settings?.ads?.hero || {};
             const sidebar = settings?.ads?.sidebar || {};
+            const feedback = settings?.feedback || {};
             heroEnabled.checked = hero.enabled !== false;
             heroEyebrow.value = hero.eyebrow || "";
             heroTitle.value = hero.title || "";
@@ -720,6 +741,11 @@
             sidebarImageUrl = sidebar.imageUrl || "";
             sidebarImagePreview.src = sidebarImageUrl;
             sidebarImagePreview.classList.toggle("hidden", !sidebarImageUrl);
+            feedbackEnabled.checked = feedback.enabled !== false;
+            feedbackPromptAfter.value = feedback.promptAfterAnswers || 5;
+            feedbackRemindDays.value = feedback.remindAfterDays || 14;
+            feedbackTitle.value = feedback.title || "Help us improve CourseMastery";
+            feedbackMessage.value = feedback.message || "Would you take a minute to tell us about your experience?";
         }
 
         function dataUrlBytes(dataUrl) {
@@ -866,6 +892,48 @@
             renderCourses(courses);
         }
 
+        function renderFeedbackResponses(items) {
+            if (!items.length) {
+                feedbackResponses.innerHTML = `<div class="rounded-lg border border-dashed border-violet-300 bg-white p-3 text-xs font-semibold text-slate-500">No feedback has been submitted yet.</div>`;
+                return;
+            }
+
+            feedbackResponses.innerHTML = items.map(item => {
+                const submittedAt = item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "Unknown date";
+                const stars = "★".repeat(Number(item.rating) || 0) + "☆".repeat(Math.max(0, 5 - (Number(item.rating) || 0)));
+                return `
+                    <article class="rounded-lg border border-violet-200 bg-white p-3 shadow-sm">
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <div class="text-sm font-extrabold text-slate-950">${esc(item.fullName || "Unknown")}</div>
+                                <div class="text-xs font-semibold text-cyan-700">${esc(item.email || "")}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-lg tracking-wide text-amber-500" aria-label="${esc(String(item.rating || 0))} out of 5 stars">${stars}</div>
+                                <div class="text-[10px] font-semibold text-slate-500">${esc(submittedAt)}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-sm font-medium text-slate-700 whitespace-pre-wrap">${esc(item.comment || "No comment provided.")}</div>
+                    </article>
+                `;
+            }).join("");
+        }
+
+        async function loadFeedbackResponses() {
+            refreshFeedbackBtn.disabled = true;
+            try {
+                const items = await API.getFeedback();
+                renderFeedbackResponses(Array.isArray(items) ? items : []);
+            } catch (err) {
+                console.error("FEEDBACK LOAD ERROR:", err);
+                feedbackResponses.innerHTML = `<div class="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">Failed to load feedback responses.</div>`;
+            } finally {
+                refreshFeedbackBtn.disabled = false;
+            }
+        }
+
+        refreshFeedbackBtn.onclick = loadFeedbackResponses;
+
         cancelEditBtn.onclick = resetForm;
         heroImageFile.addEventListener("change", async (e) => {
             const file = e.target.files?.[0];
@@ -927,16 +995,23 @@
                         cta: sidebarCta.value.trim(),
                         imageUrl: sidebarImageUrl
                     }
+                },
+                feedback: {
+                    enabled: feedbackEnabled.checked,
+                    promptAfterAnswers: Number(feedbackPromptAfter.value),
+                    remindAfterDays: Number(feedbackRemindDays.value),
+                    title: feedbackTitle.value.trim(),
+                    message: feedbackMessage.value.trim()
                 }
             };
-            status.textContent = "Saving ad settings...";
+            status.textContent = "Saving site settings...";
             try {
                 siteSettings = await API.saveSettings(payload);
                 fillAdsForm(siteSettings);
-                status.textContent = "Ad settings saved.";
+                status.textContent = "Site settings saved.";
             } catch (err) {
                 console.error("SAVE SETTINGS ERROR:", err);
-                status.textContent = "Failed to save ad settings.";
+                status.textContent = "Failed to save site settings.";
                 adminBox.innerHTML = `<pre class="text-red-600 whitespace-pre-wrap">${esc(String(err))}</pre>`;
             }
         });
@@ -991,6 +1066,7 @@
                 console.error("SETTINGS LOAD ERROR:", err);
             }
             await loadCourses();
+            await loadFeedbackResponses();
         } catch (err) {
             console.error("ADMIN API ERROR:", err);
             status.textContent = "Failed to load courses.";

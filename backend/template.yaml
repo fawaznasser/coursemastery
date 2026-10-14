@@ -1,18 +1,49 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
+Parameters:
+  FrontendOrigin:
+    Type: String
+    Default: https://coursemastery.netlify.app
+    Description: Exact HTTPS origin allowed to call the API.
+    AllowedPattern: ^https://[A-Za-z0-9.-]+(?::[0-9]+)?$
+  CognitoUserPoolArn:
+    Type: String
+    Default: arn:aws:cognito-idp:eu-central-1:672626785669:userpool/eu-central-1_fVi49DC6p
+    Description: Cognito user pool ARN used by the API authorizer.
+
 Globals:
   Function:
-    Runtime: nodejs18.x
+    Runtime: nodejs24.x
     Timeout: 30
-    MemorySize: 128
+    MemorySize: 256
+    Tracing: Active
 
   Api:
+    TracingEnabled: true
+    MinimumCompressionSize: 1024
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization'"
+      AllowOrigin: !Sub "'${FrontendOrigin}'"
+      MaxAge: "'600'"
+    MethodSettings:
+      - ResourcePath: /guest/questions
+        HttpMethod: GET
+        MetricsEnabled: true
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+      - ResourcePath: /feedback
+        HttpMethod: POST
+        MetricsEnabled: true
+        ThrottlingBurstLimit: 5
+        ThrottlingRateLimit: 1
     Auth:
       DefaultAuthorizer: CognitoAuthorizer
+      AddDefaultAuthorizerToCorsPreflight: false
       Authorizers:
         CognitoAuthorizer:
-          UserPoolArn: arn:aws:cognito-idp:eu-central-1:672626785669:userpool/eu-central-1_fVi49DC6p
+          UserPoolArn: !Ref CognitoUserPoolArn
 
 Resources:
   # ====================
@@ -21,8 +52,13 @@ Resources:
 
   CoursesTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -32,8 +68,13 @@ Resources:
 
   ProgressTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
@@ -44,6 +85,22 @@ Resources:
           KeyType: HASH
         - AttributeName: courseId
           KeyType: RANGE
+
+  FeedbackTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
 
   # ====================
   # Lambda Functions
@@ -57,9 +114,14 @@ Resources:
       Environment:
         Variables:
           TABLE: !Ref CoursesTable
+          FEEDBACK_TABLE: !Ref FeedbackTable
+          ALLOWED_ORIGIN: !Ref FrontendOrigin
+          GUEST_CACHE_SECONDS: 300
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref CoursesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FeedbackTable
       Events:
         ApiGuestQuestions:
           Type: Api
@@ -68,6 +130,20 @@ Resources:
             Method: GET
             Auth:
               Authorizer: NONE
+        ApiSubmitFeedback:
+          Type: Api
+          Properties:
+            Path: /feedback
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        ApiFeedbackAdmin:
+          Type: Api
+          Properties:
+            Path: /feedback
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
         Api:
           Type: Api
           Properties:
@@ -112,6 +188,7 @@ Resources:
       Environment:
         Variables:
           TABLE: !Ref ProgressTable
+          ALLOWED_ORIGIN: !Ref FrontendOrigin
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ProgressTable
@@ -132,3 +209,6 @@ Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  FeedbackTableName:
+    Description: DynamoDB table containing learner feedback responses
+    Value: !Ref FeedbackTable
