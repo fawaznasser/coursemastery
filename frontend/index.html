@@ -275,6 +275,7 @@
         const feedbackFullName = document.getElementById("feedbackFullName");
         const feedbackEmail = document.getElementById("feedbackEmail");
         const feedbackComment = document.getElementById("feedbackComment");
+        const feedbackStars = document.getElementById("feedbackStars");
         const feedbackRatingButtons = [...document.querySelectorAll("[data-feedback-rating]")];
         const feedbackFormStatus = document.getElementById("feedbackFormStatus");
         const feedbackLaterBtn = document.getElementById("feedbackLaterBtn");
@@ -291,6 +292,7 @@
         let answerFeedback = null;
         let feedbackSettings = null;
         let selectedFeedbackRating = 0;
+        let previewFeedbackRating = 0;
         const FEEDBACK_NEXT_PROMPT_KEY = "courseMastery.feedback.nextPromptAt";
 
         function configureFeedback(raw) {
@@ -306,9 +308,10 @@
         }
 
         function updateFeedbackStars() {
+            const activeRating = previewFeedbackRating || selectedFeedbackRating;
             feedbackRatingButtons.forEach((button) => {
                 const rating = Number(button.getAttribute("data-feedback-rating"));
-                const selected = rating <= selectedFeedbackRating;
+                const selected = rating <= activeRating;
                 button.classList.toggle("text-amber-400", selected);
                 button.classList.toggle("text-slate-300", !selected);
                 button.setAttribute("aria-checked", String(rating === selectedFeedbackRating));
@@ -365,12 +368,31 @@
         feedbackBtn.onclick = () => showFeedbackPrompt(true);
         feedbackLaterBtn.onclick = () => closeFeedbackPrompt(true);
         feedbackRatingButtons.forEach((button) => {
+            const rating = Number(button.getAttribute("data-feedback-rating"));
+            button.onmouseenter = () => {
+                previewFeedbackRating = rating;
+                updateFeedbackStars();
+            };
+            button.onfocus = () => {
+                previewFeedbackRating = rating;
+                updateFeedbackStars();
+            };
             button.onclick = () => {
-                selectedFeedbackRating = Number(button.getAttribute("data-feedback-rating"));
+                selectedFeedbackRating = rating;
+                previewFeedbackRating = 0;
                 updateFeedbackStars();
                 feedbackFormStatus.classList.add("hidden");
             };
         });
+        feedbackStars.onmouseleave = () => {
+            previewFeedbackRating = 0;
+            updateFeedbackStars();
+        };
+        feedbackStars.onfocusout = (event) => {
+            if (feedbackStars.contains(event.relatedTarget)) return;
+            previewFeedbackRating = 0;
+            updateFeedbackStars();
+        };
         feedbackForm.onsubmit = async (event) => {
             event.preventDefault();
             if (!selectedFeedbackRating) {
