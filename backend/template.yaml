@@ -144,6 +144,13 @@ Resources:
             Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
+        ApiDeleteFeedback:
+          Type: Api
+          Properties:
+            Path: /feedback/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: CognitoAuthorizer
         Api:
           Type: Api
           Properties:

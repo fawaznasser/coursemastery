@@ -8,6 +8,7 @@ const {
     ScanCommand,
     PutCommand,
     GetCommand,
+    DeleteCommand,
     BatchWriteCommand
 } = require("@aws-sdk/lib-dynamodb");
 const { randomUUID } = require("node:crypto");
@@ -602,6 +603,7 @@ exports.handler = async (event) => {
         const u = user(event);
         const settingsMatch = pathname === "/settings";
         const feedbackMatch = pathname === "/feedback";
+        const feedbackItemMatch = pathname.match(/^\/feedback\/([^/]+)$/);
         const chapterCollectionMatch = pathname.match(/\/courses\/([^/]+)\/chapters$/);
         const chapterItemMatch = pathname.match(/\/courses\/([^/]+)\/chapters\/([^/]+)$/);
 
@@ -627,6 +629,40 @@ exports.handler = async (event) => {
                 statusCode: 200,
                 headers: { ...cors(), "Content-Type": "application/json", "Cache-Control": "no-store" },
                 body: JSON.stringify(feedback)
+            };
+        }
+
+        if (event.httpMethod === "DELETE" && feedbackItemMatch) {
+            admin(u);
+            const feedbackId = decodeURIComponent(event.pathParameters?.id || feedbackItemMatch[1]);
+            if (!feedbackId.startsWith("__feedback__#")) {
+                return {
+                    statusCode: 400,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Invalid feedback id" })
+                };
+            }
+
+            const existing = await db.send(new GetCommand({
+                TableName: FEEDBACK_TABLE,
+                Key: { id: feedbackId }
+            }));
+            if (!existing.Item || existing.Item.type !== "feedback") {
+                return {
+                    statusCode: 404,
+                    headers: { ...cors(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: "Feedback not found" })
+                };
+            }
+
+            await db.send(new DeleteCommand({
+                TableName: FEEDBACK_TABLE,
+                Key: { id: feedbackId }
+            }));
+            return {
+                statusCode: 200,
+                headers: { ...cors(), "Content-Type": "application/json", "Cache-Control": "no-store" },
+                body: JSON.stringify({ ok: true, id: feedbackId })
             };
         }
 

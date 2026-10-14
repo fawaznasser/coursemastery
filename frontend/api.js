@@ -45,6 +45,7 @@ export const API = {
     getGuestQuestions: () => publicRequest("/guest/questions"),
     submitFeedback: (feedback) => publicRequest("/feedback", "POST", feedback),
     getFeedback: () => request("/feedback"),
+    deleteFeedback: (id) => request(`/feedback/${encodeURIComponent(id)}`, "DELETE"),
     getCourses: () => request("/courses"),
     getSettings: () => request("/settings"),
     saveSettings: (settings) => request("/settings", "PUT", settings),

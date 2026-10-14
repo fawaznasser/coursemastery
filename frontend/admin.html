@@ -911,12 +911,33 @@
                             <div class="text-right">
                                 <div class="text-lg tracking-wide text-amber-500" aria-label="${esc(String(item.rating || 0))} out of 5 stars">${stars}</div>
                                 <div class="text-[10px] font-semibold text-slate-500">${esc(submittedAt)}</div>
+                                <button type="button" data-delete-feedback-id="${esc(item.id || "")}" class="mt-2 rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100">Delete</button>
                             </div>
                         </div>
                         <div class="mt-2 text-sm font-medium text-slate-700 whitespace-pre-wrap">${esc(item.comment || "No comment provided.")}</div>
                     </article>
                 `;
             }).join("");
+
+            feedbackResponses.querySelectorAll("[data-delete-feedback-id]").forEach(button => {
+                button.onclick = async () => {
+                    const id = button.getAttribute("data-delete-feedback-id") || "";
+                    if (!id || !confirm("Delete this feedback response? This cannot be undone.")) return;
+
+                    button.disabled = true;
+                    button.textContent = "Deleting...";
+                    try {
+                        await API.deleteFeedback(id);
+                        await loadFeedbackResponses();
+                        status.textContent = "Feedback response deleted.";
+                    } catch (err) {
+                        console.error("FEEDBACK DELETE ERROR:", err);
+                        button.disabled = false;
+                        button.textContent = "Delete";
+                        status.textContent = "Failed to delete feedback response.";
+                    }
+                };
+            });
         }
 
         async function loadFeedbackResponses() {

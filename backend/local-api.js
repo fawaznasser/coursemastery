@@ -98,9 +98,10 @@ async function main() {
             const courseChaptersMatch = pathname.match(/^\/courses\/([^/]+)\/chapters$/);
             const courseChapterItemMatch = pathname.match(/^\/courses\/([^/]+)\/chapters\/([^/]+)$/);
             const progressMatch = pathname.match(/^\/progress\/([^/]+)$/);
+            const feedbackItemMatch = pathname.match(/^\/feedback\/([^/]+)$/);
 
             let handler;
-            if (pathname === "/courses" || pathname === "/settings" || pathname === "/feedback" || pathname === "/guest/questions" || courseMatch || courseChaptersMatch || courseChapterItemMatch) {
+            if (pathname === "/courses" || pathname === "/settings" || pathname === "/feedback" || pathname === "/guest/questions" || feedbackItemMatch || courseMatch || courseChaptersMatch || courseChapterItemMatch) {
                 handler = coursesHandler;
             } else if (progressMatch) {
                 handler = progressHandler;
@@ -111,7 +112,9 @@ async function main() {
             }
 
             let routeParams = null;
-            if (courseChapterItemMatch) {
+            if (feedbackItemMatch) {
+                routeParams = { id: decodeURIComponent(feedbackItemMatch[1]) };
+            } else if (courseChapterItemMatch) {
                 routeParams = {
                     id: decodeURIComponent(courseChapterItemMatch[1]),
                     courseId: decodeURIComponent(courseChapterItemMatch[1]),

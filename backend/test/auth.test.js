@@ -40,3 +40,29 @@ test("admin access requires the Cognito admin group", () => {
         (error) => error === "Forbidden"
     );
 });
+
+test("feedback deletion rejects non-admin users before database access", async () => {
+    const response = await coursesHandler({
+        httpMethod: "DELETE",
+        path: "/feedback/__feedback__%23123%23example",
+        pathParameters: { id: "__feedback__#123#example" },
+        requestContext: {
+            authorizer: { claims: { sub: "student-1", "cognito:groups": ["student"] } }
+        }
+    });
+
+    assert.equal(response.statusCode, 403);
+});
+
+test("feedback deletion rejects invalid ids before database access", async () => {
+    const response = await coursesHandler({
+        httpMethod: "DELETE",
+        path: "/feedback/course-1",
+        pathParameters: { id: "course-1" },
+        requestContext: {
+            authorizer: { claims: { sub: "admin-1", "cognito:groups": ["admin"] } }
+        }
+    });
+
+    assert.equal(response.statusCode, 400);
+});
